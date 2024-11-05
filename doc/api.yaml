@@ -1,0 +1,29 @@
+{
+  "openapi" : "3.0.3",
+  "info" : {
+    "title" : "Simplified login API specification",
+    "description" : "This OpenAPI document describes the simplified login API.\nCopy and paste the API from the `paths` key to your OpenAPI document.",
+    "version" : "1"
+  },
+  "servers" : [ {
+    "url" : "https://virtserver.swaggerhub.com/DONNIMESH60/WASA/1",
+    "description" : "SwaggerHub API Auto Mocking"
+  } ],
+  "paths" : {
+    "/session" : {
+      "post" : {
+        "tags" : [ "login" ],
+        "summary" : "Logs in the user",
+        "description" : "If the user does not exist, it will be created,\nand an identifier is returned.\nIf the user exists, the user identifier is returned.",
+        "operationId" : "doLogin",
+        "requestBody" : {
+          "description" : "User details",
+          "content" : {
+            "application/json" : { }
+          }
+        }
+      }
+    }
+  },
+  "components" : { }
+}
