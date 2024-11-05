@@ -1,18 +1,12 @@
 {
-  "openapi" : "3.0.3",
+  "openapi" : "3.0.0",
   "info" : {
-    "title" : "Simplified login API specification",
-    "description" : "This OpenAPI document describes the simplified login API.\nCopy and paste the API from the `paths` key to your OpenAPI document.",
-    "version" : "1"
+    "title" : "WASAText API",
+    "description" : "API",
+    "version" : "1.0.0"
   },
   "servers" : [ {
     "url" : "/"
   } ],
-  "paths" : {
-    "post" : {
-      "summary" : "Logs in the user",
-      "description" : "If the user does not exist, it will be created,\nand an identifier is returned.\nIf the user exists, the user identifier is returned."
-    }
-  },
   "components" : { }
 }
