@@ -2,10 +2,68 @@
   "openapi" : "3.0.3",
   "info" : {
     "title" : "Simplified login API specification",
-    "description" : "This OpenAPI document describes the simplified login API.\nCopy and paste the API from the `paths` key to your OpenAPI document."
+    "description" : "This OpenAPI document describes the simplified login API.\nCopy and paste the API from the `paths` key to your OpenAPI document.",
+    "version" : "1.0.0"
   },
   "servers" : [ {
     "url" : "/"
   } ],
-  "components" : { }
+  "paths" : {
+    "/session" : {
+      "post" : {
+        "tags" : [ "login" ],
+        "summary" : "Logs in the user",
+        "description" : "If the user does not exist, it will be created,\nand an identifier is returned.\nIf the user exists, the user identifier is returned.",
+        "operationId" : "doLogin",
+        "requestBody" : {
+          "description" : "User details",
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/session_body"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "description" : "User log-in action successful",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/inline_response_201"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "session_body" : {
+        "required" : [ "name" ],
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "maxLength" : 16,
+            "minLength" : 3,
+            "pattern" : "ˆ.*?$",
+            "type" : "string",
+            "example" : "Maria"
+          }
+        }
+      },
+      "inline_response_201" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "example" : "user_12345"
+          }
+        }
+      }
+    }
+  }
 }
