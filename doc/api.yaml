@@ -1,9 +1,8 @@
 {
-  "openapi" : "3.0.0",
+  "openapi" : "3.0.3",
   "info" : {
-    "title" : "WASAText API amama",
-    "description" : "API",
-    "version" : "1.0.0"
+    "title" : "Simplified login API specification",
+    "description" : "This OpenAPI document describes the simplified login API.\nCopy and paste the API from the `paths` key to your OpenAPI document."
   },
   "servers" : [ {
     "url" : "/"
