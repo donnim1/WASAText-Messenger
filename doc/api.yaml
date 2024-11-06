@@ -38,6 +38,47 @@
           }
         }
       }
+    },
+    "/user/name" : {
+      "put" : {
+        "tags" : [ "user" ],
+        "summary" : "Updates the user's name",
+        "description" : "Updates the name of the current user. The new name must be unique and follow the specified length constraints.",
+        "operationId" : "setMyUserName",
+        "requestBody" : {
+          "description" : "New username details",
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/user_name_body"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Username updated successfully",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/inline_response_200"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Username already in use or does not meet the criteria",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/inline_response_400"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -61,6 +102,37 @@
           "id" : {
             "type" : "string",
             "example" : "user_12345"
+          }
+        }
+      },
+      "user_name_body" : {
+        "required" : [ "newName" ],
+        "type" : "object",
+        "properties" : {
+          "newName" : {
+            "maxLength" : 16,
+            "minLength" : 3,
+            "pattern" : "^[a-zA-Z0-9_-]*$",
+            "type" : "string",
+            "example" : "JohnDoe"
+          }
+        }
+      },
+      "inline_response_200" : {
+        "type" : "object",
+        "properties" : {
+          "message" : {
+            "type" : "string",
+            "example" : "Username updated successfully."
+          }
+        }
+      },
+      "inline_response_400" : {
+        "type" : "object",
+        "properties" : {
+          "error" : {
+            "type" : "string",
+            "example" : "Username already taken or invalid format."
           }
         }
       }
