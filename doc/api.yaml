@@ -143,7 +143,6 @@ paths:
                     description: Error message for failed photo upload
                     example: "Invalid file format or error during upload."
 
-
   /conversations:
     get:
       tags: ["conversations"]
@@ -245,6 +244,168 @@ paths:
                   messageId:
                     type: string
                     description: Unique identifier of the sent message
+
+  /conversations/messages/{messageId}:
+    delete:
+      tags: ["conversations"]
+      summary: Delete a message by ID
+      description: Deletes a specific message by its unique ID.
+      operationId: deleteMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Message deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Success message for message deletion
+                    example: "Message deleted successfully."
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message for non-existent message
+                    example: "Message not found."
+
+  /conversations/messages/{messageId}/forward:
+    post:
+      tags: ["conversations"]
+      summary: Forward a message to a new conversation
+      description: Forwards a specific message to another conversation.
+      operationId: forwardMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Destination conversation ID for message forwarding
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                destinationConversationId:
+                  type: string
+                  description: ID of the conversation where the message should be forwarded
+              required:
+                - destinationConversationId
+      responses:
+        '200':
+          description: Message forwarded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messageId:
+                    type: string
+                    description: Unique identifier of the forwarded message
+        '404':
+          description: Original message or destination conversation not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message for failed forwarding
+                    example: "Message or conversation not found."
+
+  /conversations/messages/{messageId}/comment:
+    post:
+      tags: ["conversations"]
+      summary: Add a comment to a message
+      description: Allows the user to add a comment to a specific message.
+      operationId: commentMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Content of the comment to be added
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                commentContent:
+                  type: string
+                  description: Text of the comment
+              required:
+                - commentContent
+      responses:
+        '201':
+          description: Comment added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commentId:
+                    type: string
+                    description: Unique identifier of the comment
+
+  /conversations/messages/{messageId}/uncomment:
+    delete:
+      tags: ["conversations"]
+      summary: Remove a comment from a message
+      description: Deletes a specific comment by its unique ID from a message.
+      operationId: uncommentMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: commentId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comment removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Success message for comment deletion
+                    example: "Comment removed successfully."
+        '404':
+          description: Comment or message not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message for non-existent comment or message
+                    example: "Comment or message not found."
 
   /groups:
     post:
@@ -381,7 +542,6 @@ paths:
                     description: Error message for a non-existent group
                     example: "Group not found."
 
-
 components:
   securitySchemes:
     BearerAuth:
@@ -391,5 +551,3 @@ components:
 
 security:
   - BearerAuth: []
-
-  
