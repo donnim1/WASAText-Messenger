@@ -101,6 +101,48 @@ paths:
                     type: string
                     description: Error message for failed username update
                     example: "Username already taken or invalid format."
+  /user/photo:
+    put:
+      tags: ["user"]
+      summary: Update the user's profile photo
+      description: Allows the user to upload or update their profile photo.
+      operationId: setMyPhoto
+      requestBody:
+        description: New profile photo for the user
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+                  description: The new profile photo file to upload
+      responses:
+        '200':
+          description: Profile photo updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Success message indicating profile photo was updated
+                    example: "Profile photo updated successfully."
+        '400':
+          description: Invalid file format or upload error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message for failed photo upload
+                    example: "Invalid file format or error during upload."
+
 
   /conversations:
     get:
