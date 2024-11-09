@@ -319,6 +319,68 @@ paths:
                   message:
                     type: string
                     description: Success message
+  /groups/{groupId}/photo:
+    put:
+      tags: ["groups"]
+      summary: Update the group's profile photo
+      description: Allows the user to upload or update the profile photo for a specific group.
+      operationId: setGroupPhoto
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the group
+      requestBody:
+        description: New profile photo for the group
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+                  description: The new group photo file to upload
+      responses:
+        '200':
+          description: Group photo updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Success message indicating group photo was updated
+                    example: "Group photo updated successfully."
+        '400':
+          description: Invalid file format or upload error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message for failed photo upload
+                    example: "Invalid file format or error during upload."
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message for a non-existent group
+                    example: "Group not found."
+
 
 components:
   securitySchemes:
