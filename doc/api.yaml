@@ -541,6 +541,54 @@ paths:
                     type: string
                     description: Error message for a non-existent group
                     example: "Group not found."
+  /groups/{groupId}/leave:
+    delete:
+      tags: ["groups"]
+      summary: Leave a group
+      description: Allows a user to leave a specific group.
+      operationId: leaveGroup
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the group
+      responses:
+        '200':
+          description: Successfully left the group
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Confirmation message indicating the user has left the group
+                    example: "Successfully left the group."
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message indicating the group was not found
+                    example: "Group not found."
+        '403':
+          description: User is not a member of the group
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message for non-membership
+                    example: "User is not a member of this group."
+
 
 components:
   securitySchemes:
