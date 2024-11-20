@@ -162,18 +162,28 @@ paths:
                     conversationId:
                       type: string
                       description: Unique identifier for the conversation
+                      minLength: 1
+                      maxLength: 100
                     title:
                       type: string
                       description: Name of the user or group
+                      minLength: 1
+                      maxLength: 100
                     lastMessage:
                       type: string
                       description: Preview of the last message in the conversation
+                      minLength: 1
+                      maxLength: 100
                     timestamp:
                       type: string
                       description: Timestamp of the last message
+                      minLength: 1
+                      maxLength: 50
                     unreadCount:
                       type: integer
                       description: Number of unread messages in the conversation
+                      minLength: 1
+                      maxLength: 100
 
   /conversations/{conversationId}:
     get:
@@ -200,15 +210,23 @@ paths:
                     messageId:
                       type: string
                       description: Unique identifier for the message
+                      minLength: 1
+                      maxLength: 100
                     sender:
                       type: string
                       description: Username of the message sender
+                      minLength: 1
+                      maxLength: 100
                     content:
                       type: string
                       description: Message content (text or photo link)
+                      minLength: 1
+                      maxLength: 100
                     timestamp:
                       type: string
                       description: Timestamp of the message
+                      minLength: 1
+                      maxLength: 50
 
   /messages:
     post:
