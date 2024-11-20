@@ -2,8 +2,10 @@ openapi: 3.0.3
 info:
   title: WASAText API Specification
   description: |-
-    This OpenAPI document describes the WASAText API, allowing users to log in, manage conversations, send messages, and create groups.
-  version: "1"
+    This OpenAPI document describes the WASAText API, allowing users to log in, 
+    manage conversations, send messages, and create groups. The API provides 
+    comprehensive functionality for a modern messaging platform.
+  version: "1.1"
 tags:
   - name: login
     description: Operations related to user login and authentication
@@ -30,12 +32,13 @@ paths:
           application/json:
             schema:
               type: object
+              description: Login request object containing user credentials
               properties:
                 name:
                   type: string
-                  description: The username to log in or register
+                  description: The username to log in or register with
                   example: "Maria"
-                  pattern: '.*'
+                  pattern: '^[a-zA-Z0-9_-]*$'
                   minLength: 3
                   maxLength: 16
               required:
@@ -47,11 +50,80 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Login response containing authentication token
                 properties:
                   identifier:
                     type: string
                     description: Unique user identifier for session authorization
                     example: "abcdef012345"
+                    pattern: '^[0-9a-fA-F]{12}$'
+                    minLength: 12
+                    maxLength: 12
+
+  /users:
+    get:
+      tags: ["user"]
+      summary: Get list of all users
+      description: Retrieves a list of all users in the system that can be added to conversations or groups
+      operationId: getUsers
+      parameters:
+        - name: search
+          in: query
+          description: Optional search term to filter users by name
+          required: false
+          schema:
+            type: string
+            description: Search query string
+            minLength: 1
+            maxLength: 50
+        - name: limit
+          in: query
+          description: Maximum number of users to return
+          required: false
+          schema:
+            type: integer
+            description: Limit value for pagination
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Array of user objects
+                minItems: 0
+                maxItems: 100
+                items:
+                  type: object
+                  description: User information object
+                  properties:
+                    userId:
+                      type: string
+                      description: Unique identifier for the user
+                      pattern: '^[0-9a-fA-F-]{36}$'
+                      minLength: 36
+                      maxLength: 36
+                    name:
+                      type: string
+                      description: Username of the user
+                      pattern: '^[a-zA-Z0-9_-]*$'
+                      minLength: 3
+                      maxLength: 16
+                    photoUrl:
+                      type: string
+                      description: URL to user's profile photo
+                      pattern: '^https?://.*$'
+                      minLength: 1
+                      maxLength: 255
+                    status:
+                      type: string
+                      description: Current online status of the user
+                      enum: ['online', 'offline', 'away']
+                      minLength: 1
+                      maxLength: 7
 
   /user/name:
     put:
@@ -68,6 +140,7 @@ paths:
           application/json:
             schema:
               type: object
+              description: Username update request object
               properties:
                 newName:
                   type: string
@@ -85,27 +158,34 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Success response for username update
                 properties:
                   message:
                     type: string
                     description: Success message indicating username was updated
                     example: "Username updated successfully."
+                    minLength: 1
+                    maxLength: 100
         '400':
           description: Username already in use or does not meet the criteria
           content:
             application/json:
               schema:
                 type: object
+                description: Error response for username update
                 properties:
                   error:
                     type: string
                     description: Error message for failed username update
                     example: "Username already taken or invalid format."
+                    minLength: 1
+                    maxLength: 100
+
   /user/photo:
     put:
       tags: ["user"]
       summary: Update the user's profile photo
-      description: Allows the user to upload or update their profile photo.
+      description: Allows the user to upload or update their profile photo
       operationId: setMyPhoto
       requestBody:
         description: New profile photo for the user
@@ -114,6 +194,7 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              description: Photo upload request object
               properties:
                 photo:
                   type: string
@@ -126,29 +207,61 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Success response for photo upload
                 properties:
                   message:
                     type: string
                     description: Success message indicating profile photo was updated
                     example: "Profile photo updated successfully."
+                    minLength: 1
+                    maxLength: 100
+                  photoUrl:
+                    type: string
+                    description: URL of the uploaded photo
+                    pattern: '^https?://.*$'
+                    minLength: 1
+                    maxLength: 255
         '400':
           description: Invalid file format or upload error
           content:
             application/json:
               schema:
                 type: object
+                description: Error response for photo upload
                 properties:
                   error:
                     type: string
                     description: Error message for failed photo upload
                     example: "Invalid file format or error during upload."
+                    minLength: 1
+                    maxLength: 100
 
   /conversations:
     get:
       tags: ["conversations"]
       summary: Retrieve a list of user's conversations
-      description: Retrieves all conversations of the logged-in user.
+      description: Retrieves all conversations of the logged-in user
       operationId: getMyConversations
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of conversations to return
+          required: false
+          schema:
+            type: integer
+            description: Limit value for pagination
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Number of conversations to skip
+          required: false
+          schema:
+            type: integer
+            description: Offset value for pagination
+            minimum: 0
+            default: 0
       responses:
         '200':
           description: List of conversations retrieved successfully
@@ -156,14 +269,19 @@ paths:
             application/json:
               schema:
                 type: array
+                description: Array of conversation objects
+                minItems: 0
+                maxItems: 100
                 items:
                   type: object
+                  description: Conversation information object
                   properties:
                     conversationId:
                       type: string
                       description: Unique identifier for the conversation
-                      minLength: 1
-                      maxLength: 100
+                      pattern: '^[0-9a-fA-F-]{36}$'
+                      minLength: 36
+                      maxLength: 36
                     title:
                       type: string
                       description: Name of the user or group
@@ -177,26 +295,52 @@ paths:
                     timestamp:
                       type: string
                       description: Timestamp of the last message
-                      minLength: 1
-                      maxLength: 50
+                      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+                      minLength: 20
+                      maxLength: 20
                     unreadCount:
                       type: integer
                       description: Number of unread messages in the conversation
-                      minLength: 1
-                      maxLength: 100
+                      minimum: 0
+                      maximum: 9999
 
   /conversations/{conversationId}:
     get:
       tags: ["conversations"]
       summary: Retrieve a specific conversation by ID
-      description: Retrieves all messages within a specific conversation.
+      description: Retrieves all messages within a specific conversation
       operationId: getConversation
       parameters:
         - name: conversationId
           in: path
           required: true
+          description: Unique identifier of the conversation
           schema:
             type: string
+            description: Conversation ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
+        - name: limit
+          in: query
+          description: Maximum number of messages to return
+          required: false
+          schema:
+            type: integer
+            description: Limit value for pagination
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: before
+          in: query
+          description: Timestamp to get messages before
+          required: false
+          schema:
+            type: string
+            description: ISO timestamp
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+            minLength: 20
+            maxLength: 20
       responses:
         '200':
           description: List of messages in the conversation retrieved successfully
@@ -204,35 +348,112 @@ paths:
             application/json:
               schema:
                 type: array
+                description: Array of message objects
+                minItems: 0
+                maxItems: 100
                 items:
                   type: object
+                  description: Message information object
                   properties:
                     messageId:
                       type: string
                       description: Unique identifier for the message
-                      minLength: 1
-                      maxLength: 100
+                      pattern: '^[0-9a-fA-F-]{36}$'
+                      minLength: 36
+                      maxLength: 36
                     sender:
                       type: string
                       description: Username of the message sender
-                      minLength: 1
-                      maxLength: 100
+                      pattern: '^[a-zA-Z0-9_-]*$'
+                      minLength: 3
+                      maxLength: 16
                     content:
                       type: string
                       description: Message content (text or photo link)
                       minLength: 1
-                      maxLength: 100
+                      maxLength: 2000
                     timestamp:
                       type: string
                       description: Timestamp of the message
+                      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+                      minLength: 20
+                      maxLength: 20
+                    type:
+                      type: string
+                      description: Type of the message content
+                      enum: ['text', 'photo', 'forward']
+                      minLength: 4
+                      maxLength: 7
+
+  /conversations/search:
+    get:
+      tags: ["conversations"]
+      summary: Search messages across conversations
+      description: Search for messages containing specific text across all conversations
+      operationId: searchMessages
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Search query string
+          schema:
+            type: string
+            description: Text to search for in messages
+            minLength: 1
+            maxLength: 100
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            description: Limit value for pagination
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Search results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Array of message search results
+                minItems: 0
+                maxItems: 100
+                items:
+                  type: object
+                  description: Message search result object
+                  properties:
+                    messageId:
+                      type: string
+                      description: Unique identifier for the message
+                      pattern: '^[0-9a-fA-F-]{36}$'
+                      minLength: 36
+                      maxLength: 36
+                    conversationId:
+                      type: string
+                      description: ID of the conversation containing the message
+                      pattern: '^[0-9a-fA-F-]{36}$'
+                      minLength: 36
+                      maxLength: 36
+                    content:
+                      type: string
+                      description: Message content with search term highlighted
                       minLength: 1
-                      maxLength: 50
+                      maxLength: 2000
+                    timestamp:
+                      type: string
+                      description: Timestamp of the message
+                      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+                      minLength: 20
+                      maxLength: 20
 
   /messages:
     post:
       tags: ["conversations"]
       summary: Send a message to a user or group
-      description: Sends a new message in a specified conversation.
+      description: Sends a new message in a specified conversation
       operationId: sendMessage
       requestBody:
         description: Details of the message to be sent
@@ -241,13 +462,19 @@ paths:
           application/json:
             schema:
               type: object
+              description: Message send request object
               properties:
                 conversationId:
                   type: string
                   description: The ID of the conversation where the message is sent
+                  pattern: '^[0-9a-fA-F-]{36}$'
+                  minLength: 36
+                  maxLength: 36
                 content:
                   type: string
                   description: Message content (text or photo link)
+                  minLength: 1
+                  maxLength: 2000
               required:
                 - conversationId
                 - content
@@ -258,23 +485,32 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Message send success response
                 properties:
                   messageId:
                     type: string
                     description: Unique identifier of the sent message
+                    pattern: '^[0-9a-fA-F-]{36}$'
+                    minLength: 36
+                    maxLength: 36
 
   /conversations/messages/{messageId}:
     delete:
       tags: ["conversations"]
       summary: Delete a message by ID
-      description: Deletes a specific message by its unique ID.
+      description: Deletes a specific message by its unique ID
       operationId: deleteMessage
       parameters:
         - name: messageId
           in: path
           required: true
+          description: Unique identifier of the message to delete
           schema:
             type: string
+            description: Message ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       responses:
         '200':
           description: Message deleted successfully
@@ -282,11 +518,12 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Message deletion success response
                 properties:
                   message:
                     type: string
                     description: Success message for message deletion
-                    example: "Message deleted successfully."
+                    example: "Message deleted successfully"
         '404':
           description: Message not found
           content:
@@ -298,19 +535,24 @@ paths:
                     type: string
                     description: Error message for non-existent message
                     example: "Message not found."
-
+                    
   /conversations/messages/{messageId}/forward:
     post:
       tags: ["conversations"]
       summary: Forward a message to a new conversation
-      description: Forwards a specific message to another conversation.
+      description: Forwards a specific message to another conversation
       operationId: forwardMessage
       parameters:
         - name: messageId
           in: path
           required: true
+          description: Unique identifier of the message to forward
           schema:
             type: string
+            description: Message ID to forward
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       requestBody:
         description: Destination conversation ID for message forwarding
         required: true
@@ -318,10 +560,14 @@ paths:
           application/json:
             schema:
               type: object
+              description: Message forward request object
               properties:
                 destinationConversationId:
                   type: string
                   description: ID of the conversation where the message should be forwarded
+                  pattern: '^[0-9a-fA-F-]{36}$'
+                  minLength: 36
+                  maxLength: 36
               required:
                 - destinationConversationId
       responses:
@@ -331,34 +577,46 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Message forward success response
                 properties:
                   messageId:
                     type: string
                     description: Unique identifier of the forwarded message
+                    pattern: '^[0-9a-fA-F-]{36}$'
+                    minLength: 36
+                    maxLength: 36
         '404':
           description: Original message or destination conversation not found
           content:
             application/json:
               schema:
                 type: object
+                description: Error response for message forwarding
                 properties:
                   error:
                     type: string
                     description: Error message for failed forwarding
                     example: "Message or conversation not found."
+                    minLength: 1
+                    maxLength: 100
 
   /conversations/messages/{messageId}/comment:
     post:
       tags: ["conversations"]
       summary: Add a comment to a message
-      description: Allows the user to add a comment to a specific message.
+      description: Allows the user to add a comment to a specific message
       operationId: commentMessage
       parameters:
         - name: messageId
           in: path
           required: true
+          description: Unique identifier of the message to comment on
           schema:
             type: string
+            description: Message ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       requestBody:
         description: Content of the comment to be added
         required: true
@@ -366,10 +624,13 @@ paths:
           application/json:
             schema:
               type: object
+              description: Comment creation request object
               properties:
                 commentContent:
                   type: string
                   description: Text of the comment
+                  minLength: 1
+                  maxLength: 1000
               required:
                 - commentContent
       responses:
@@ -379,28 +640,42 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Comment creation success response
                 properties:
                   commentId:
                     type: string
                     description: Unique identifier of the comment
+                    pattern: '^[0-9a-fA-F-]{36}$'
+                    minLength: 36
+                    maxLength: 36
 
   /conversations/messages/{messageId}/uncomment:
     delete:
       tags: ["conversations"]
       summary: Remove a comment from a message
-      description: Deletes a specific comment by its unique ID from a message.
+      description: Deletes a specific comment by its unique ID from a message
       operationId: uncommentMessage
       parameters:
         - name: messageId
           in: path
           required: true
+          description: Unique identifier of the message containing the comment
           schema:
             type: string
+            description: Message ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
         - name: commentId
           in: query
           required: true
+          description: Unique identifier of the comment to delete
           schema:
             type: string
+            description: Comment ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       responses:
         '200':
           description: Comment removed successfully
@@ -408,28 +683,87 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Comment deletion success response
                 properties:
                   message:
                     type: string
                     description: Success message for comment deletion
                     example: "Comment removed successfully."
+                    minLength: 1
+                    maxLength: 100
         '404':
           description: Comment or message not found
           content:
             application/json:
               schema:
                 type: object
+                description: Error response for comment deletion
                 properties:
                   error:
                     type: string
                     description: Error message for non-existent comment or message
                     example: "Comment or message not found."
+                    minLength: 1
+                    maxLength: 100
 
   /groups:
+    get:
+      tags: ["groups"]
+      summary: Get list of user's groups
+      description: Retrieves all groups the current user is a member of
+      operationId: getMyGroups
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of groups to return
+          required: false
+          schema:
+            type: integer
+            description: Limit value for pagination
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of groups retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Array of group objects
+                minItems: 0
+                maxItems: 100
+                items:
+                  type: object
+                  description: Group information object
+                  properties:
+                    groupId:
+                      type: string
+                      description: Unique identifier of the group
+                      pattern: '^[0-9a-fA-F-]{36}$'
+                      minLength: 36
+                      maxLength: 36
+                    name:
+                      type: string
+                      description: Name of the group
+                      minLength: 3
+                      maxLength: 50
+                    memberCount:
+                      type: integer
+                      description: Number of members in the group
+                      minimum: 2
+                      maximum: 1000
+                    photoUrl:
+                      type: string
+                      description: URL to group's profile photo
+                      pattern: '^https?://.*$'
+                      minLength: 1
+                      maxLength: 255
+    
     post:
       tags: ["groups"]
       summary: Create a new group
-      description: Creates a new group for the user to have group conversations.
+      description: Creates a new group for the user to have group conversations
       operationId: createGroup
       requestBody:
         description: Details of the group to be created
@@ -438,15 +772,25 @@ paths:
           application/json:
             schema:
               type: object
+              description: Group creation request object
               properties:
                 groupName:
                   type: string
                   description: Name of the group
+                  minLength: 3
+                  maxLength: 50
+                  pattern: '^[a-zA-Z0-9\s_-]*$'
                 members:
                   type: array
                   description: List of user IDs to add to the group
+                  minItems: 1
+                  maxItems: 100
                   items:
                     type: string
+                    description: User ID to add to group
+                    pattern: '^[0-9a-fA-F-]{36}$'
+                    minLength: 36
+                    maxLength: 36
               required:
                 - groupName
                 - members
@@ -457,23 +801,164 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Group creation success response
                 properties:
                   groupId:
                     type: string
                     description: Unique identifier of the created group
+                    pattern: '^[0-9a-fA-F-]{36}$'
+                    minLength: 36
+                    maxLength: 36
+
+  /groups/{groupId}:
+    get:
+      tags: ["groups"]
+      summary: Get group details
+      description: Retrieves detailed information about a specific group
+      operationId: getGroupDetails
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          description: Unique identifier of the group
+          schema:
+            type: string
+            description: Group ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
+      responses:
+        '200':
+          description: Group details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Group details object
+                properties:
+                  groupId:
+                    type: string
+                    description: Unique identifier of the group
+                    pattern: '^[0-9a-fA-F-]{36}$'
+                    minLength: 36
+                    maxLength: 36
+                  name:
+                    type: string
+                    description: Name of the group
+                    minLength: 3
+                    maxLength: 50
+                  photoUrl:
+                    type: string
+                    description: URL to group's profile photo
+                    pattern: '^https?://.*$'
+                    minLength: 1
+                    maxLength: 255
+                  createdAt:
+                    type: string
+                    description: Timestamp when the group was created
+                    pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+                    minLength: 20
+                    maxLength: 20
+                  members:
+                    type: array
+                    description: List of group members
+                    minItems: 2
+                    maxItems: 1000
+                    items:
+                      type: object
+                      description: Group member information
+                      properties:
+                        userId:
+                          type: string
+                          description: Unique identifier of the member
+                          pattern: '^[0-9a-fA-F-]{36}$'
+                          minLength: 36
+                          maxLength: 36
+                        name:
+                          type: string
+                          description: Username of the member
+                          pattern: '^[a-zA-Z0-9_-]*$'
+                          minLength: 3
+                          maxLength: 16
+                        role:
+                          type: string
+                          description: Role of the member in the group
+                          enum: ['admin', 'member']
+                          minLength: 5
+                          maxLength: 5
 
   /groups/{groupId}/members:
+    get:
+      tags: ["groups"]
+      summary: Get group members
+      description: Retrieves the list of members in a specific group
+      operationId: getGroupMembers
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          description: Unique identifier of the group
+          schema:
+            type: string
+            description: Group ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
+      responses:
+        '200':
+          description: Group members retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Array of group member objects
+                minItems: 2
+                maxItems: 1000
+                items:
+                  type: object
+                  description: Group member information
+                  properties:
+                    userId:
+                      type: string
+                      description: Unique identifier of the member
+                      pattern: '^[0-9a-fA-F-]{36}$'
+                      minLength: 36
+                      maxLength: 36
+                    name:
+                      type: string
+                      description: Username of the member
+                      pattern: '^[a-zA-Z0-9_-]*$'
+                      minLength: 3
+                      maxLength: 16
+                    role:
+                      type: string
+                      description: Role of the member in the group
+                      enum: ['admin', 'member']
+                      minLength: 5
+                      maxLength: 5
+                    joinedAt:
+                      type: string
+                      description: Timestamp when the member joined
+                      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+                      minLength: 20
+                      maxLength: 20
+
     post:
       tags: ["groups"]
       summary: Add a user to an existing group
-      description: Adds a user to an existing group by user ID.
+      description: Adds a user to an existing group by user ID
       operationId: addToGroup
       parameters:
         - name: groupId
           in: path
           required: true
+          description: Unique identifier of the group
           schema:
             type: string
+            description: Group ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       requestBody:
         description: User ID to add to the group
         required: true
@@ -481,10 +966,14 @@ paths:
           application/json:
             schema:
               type: object
+              description: Group member addition request object
               properties:
                 userId:
                   type: string
                   description: ID of the user to add to the group
+                  pattern: '^[0-9a-fA-F-]{36}$'
+                  minLength: 36
+                  maxLength: 36
               required:
                 - userId
       responses:
@@ -494,25 +983,31 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Group member addition success response
                 properties:
                   message:
                     type: string
                     description: Success message
+                    minLength: 1
+                    maxLength: 100
+
   /groups/{groupId}/photo:
     put:
       tags: ["groups"]
       summary: Update the group's profile photo
-      description: Allows the user to upload or update the profile photo for a specific group.
+      description: Allows the user to upload or update the profile photo for a specific group
       operationId: setGroupPhoto
-      security:
-        - BearerAuth: []
       parameters:
         - name: groupId
           in: path
           required: true
+          description: Unique identifier of the group
           schema:
             type: string
-          description: The unique identifier of the group
+            description: Group ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       requestBody:
         description: New profile photo for the group
         required: true
@@ -520,6 +1015,7 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              description: Group photo upload request object
               properties:
                 photo:
                   type: string
@@ -532,33 +1028,35 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Group photo update success response
                 properties:
                   message:
                     type: string
                     description: Success message indicating group photo was updated
                     example: "Group photo updated successfully."
+                    minLength: 1
+                    maxLength: 100
+                  photoUrl:
+                    type: string
+                    description: URL of the uploaded photo
+                    pattern: '^https?://.*$'
+                    minLength: 1
+                    maxLength: 255
         '400':
           description: Invalid file format or upload error
           content:
             application/json:
               schema:
                 type: object
+                description: Error response for photo upload
                 properties:
                   error:
                     type: string
                     description: Error message for failed photo upload
                     example: "Invalid file format or error during upload."
-        '404':
-          description: Group not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    description: Error message for a non-existent group
-                    example: "Group not found."
+                    minLength: 1
+                    maxLength: 100
+
   /groups/{groupId}/leave:
     delete:
       tags: ["groups"]
@@ -617,3 +1115,10 @@ components:
 
 security:
   - BearerAuth: []
+
+                    
+                    
+                    
+                    
+                  
+                    
