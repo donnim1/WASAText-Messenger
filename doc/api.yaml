@@ -59,6 +59,7 @@ paths:
                     pattern: '^[0-9a-fA-F]{12}$'
                     minLength: 12
                     maxLength: 12
+                additionalProperties: false
 
   /users:
     get:
@@ -124,6 +125,8 @@ paths:
                       enum: ['online', 'offline', 'away']
                       minLength: 1
                       maxLength: 7
+                      pattern: .*
+                  additionalProperties: false
 
   /user/name:
     put:
@@ -163,9 +166,11 @@ paths:
                   message:
                     type: string
                     description: Success message indicating username was updated
+                    pattern: '^[a-zA-Z0-9_-]{3,16}$'
                     example: "Username updated successfully."
                     minLength: 1
                     maxLength: 100
+                additionalProperties: false
         '400':
           description: Username already in use or does not meet the criteria
           content:
@@ -177,9 +182,11 @@ paths:
                   error:
                     type: string
                     description: Error message for failed username update
+                    pattern: '^[a-zA-Z0-9_-]{3,16}$'
                     example: "Username already taken or invalid format."
                     minLength: 1
                     maxLength: 100
+                additionalProperties: false
 
   /user/photo:
     put:
@@ -215,12 +222,14 @@ paths:
                     example: "Profile photo updated successfully."
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
                   photoUrl:
                     type: string
                     description: URL of the uploaded photo
                     pattern: '^https?://.*$'
                     minLength: 1
                     maxLength: 255
+                additionalProperties: false
         '400':
           description: Invalid file format or upload error
           content:
@@ -235,6 +244,8 @@ paths:
                     example: "Invalid file format or error during upload."
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
+                additionalProperties: false
 
   /conversations:
     get:
@@ -287,11 +298,13 @@ paths:
                       description: Name of the user or group
                       minLength: 1
                       maxLength: 100
+                      pattern: .*
                     lastMessage:
                       type: string
                       description: Preview of the last message in the conversation
                       minLength: 1
                       maxLength: 100
+                      pattern: .*
                     timestamp:
                       type: string
                       description: Timestamp of the last message
@@ -303,6 +316,7 @@ paths:
                       description: Number of unread messages in the conversation
                       minimum: 0
                       maximum: 9999
+                  additionalProperties: false
 
   /conversations/{conversationId}:
     get:
@@ -372,6 +386,7 @@ paths:
                       description: Message content (text or photo link)
                       minLength: 1
                       maxLength: 2000
+                      pattern: .*
                     timestamp:
                       type: string
                       description: Timestamp of the message
@@ -384,6 +399,8 @@ paths:
                       enum: ['text', 'photo', 'forward']
                       minLength: 4
                       maxLength: 7
+                      pattern: .*
+                  additionalProperties: false
 
   /conversations/search:
     get:
@@ -442,12 +459,14 @@ paths:
                       description: Message content with search term highlighted
                       minLength: 1
                       maxLength: 2000
+                      pattern: .*
                     timestamp:
                       type: string
                       description: Timestamp of the message
                       pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
                       minLength: 20
                       maxLength: 20
+                  additionalProperties: false
 
   /messages:
     post:
@@ -493,6 +512,7 @@ paths:
                     pattern: '^[0-9a-fA-F-]{36}$'
                     minLength: 36
                     maxLength: 36
+                additionalProperties: false
 
   /conversations/messages/{messageId}:
     delete:
@@ -524,6 +544,8 @@ paths:
                     type: string
                     description: Success message for message deletion
                     example: "Message deleted successfully"
+                    pattern: .*
+                additionalProperties: false
         '404':
           description: Message not found
           content:
@@ -535,6 +557,8 @@ paths:
                     type: string
                     description: Error message for non-existent message
                     example: "Message not found."
+                    pattern: .*
+                additionalProperties: false
                     
   /conversations/messages/{messageId}/forward:
     post:
@@ -568,6 +592,7 @@ paths:
                   pattern: '^[0-9a-fA-F-]{36}$'
                   minLength: 36
                   maxLength: 36
+              additionalProperties: false
               required:
                 - destinationConversationId
       responses:
@@ -599,6 +624,8 @@ paths:
                     example: "Message or conversation not found."
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
+                additionalProperties: false
 
   /conversations/messages/{messageId}/comment:
     post:
@@ -648,6 +675,7 @@ paths:
                     pattern: '^[0-9a-fA-F-]{36}$'
                     minLength: 36
                     maxLength: 36
+                additionalProperties: false
 
   /conversations/messages/{messageId}/uncomment:
     delete:
@@ -691,6 +719,8 @@ paths:
                     example: "Comment removed successfully."
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
+                additionalProperties: false
         '404':
           description: Comment or message not found
           content:
@@ -705,6 +735,8 @@ paths:
                     example: "Comment or message not found."
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
+                additionalProperties: false
 
   /groups:
     get:
@@ -748,6 +780,7 @@ paths:
                       description: Name of the group
                       minLength: 3
                       maxLength: 50
+                      pattern: .*
                     memberCount:
                       type: integer
                       description: Number of members in the group
@@ -759,6 +792,7 @@ paths:
                       pattern: '^https?://.*$'
                       minLength: 1
                       maxLength: 255
+                  additionalProperties: false
     
     post:
       tags: ["groups"]
@@ -809,6 +843,7 @@ paths:
                     pattern: '^[0-9a-fA-F-]{36}$'
                     minLength: 36
                     maxLength: 36
+                additionalProperties: false
 
   /groups/{groupId}:
     get:
@@ -847,6 +882,7 @@ paths:
                     description: Name of the group
                     minLength: 3
                     maxLength: 50
+                    pattern: .*
                   photoUrl:
                     type: string
                     description: URL to group's profile photo
@@ -886,6 +922,8 @@ paths:
                           enum: ['admin', 'member']
                           minLength: 5
                           maxLength: 5
+                          pattern: .*
+                      additionalProperties: false
 
   /groups/{groupId}/members:
     get:
@@ -936,12 +974,14 @@ paths:
                       enum: ['admin', 'member']
                       minLength: 5
                       maxLength: 5
+                      pattern: .*
                     joinedAt:
                       type: string
                       description: Timestamp when the member joined
                       pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
                       minLength: 20
                       maxLength: 20
+                  additionalProperties: false
 
     post:
       tags: ["groups"]
@@ -990,6 +1030,8 @@ paths:
                     description: Success message
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
+                additionalProperties: false
 
   /groups/{groupId}/photo:
     put:
@@ -1036,12 +1078,14 @@ paths:
                     example: "Group photo updated successfully."
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
                   photoUrl:
                     type: string
                     description: URL of the uploaded photo
                     pattern: '^https?://.*$'
                     minLength: 1
                     maxLength: 255
+                additionalProperties: false
         '400':
           description: Invalid file format or upload error
           content:
@@ -1056,6 +1100,8 @@ paths:
                     example: "Invalid file format or error during upload."
                     minLength: 1
                     maxLength: 100
+                    pattern: .*
+                additionalProperties: false
 
   /groups/{groupId}/leave:
     delete:
@@ -1082,6 +1128,8 @@ paths:
                     type: string
                     description: Confirmation message indicating the user has left the group
                     example: "Successfully left the group."
+                    pattern: .*
+                additionalProperties: false
         '404':
           description: Group not found
           content:
@@ -1093,6 +1141,8 @@ paths:
                     type: string
                     description: Error message indicating the group was not found
                     example: "Group not found."
+                    pattern: .*
+                additionalProperties: false
         '403':
           description: User is not a member of the group
           content:
@@ -1104,6 +1154,8 @@ paths:
                     type: string
                     description: Error message for non-membership
                     example: "User is not a member of this group."
+                    pattern: .*
+                additionalProperties: false
 
 
 components:
