@@ -6,50 +6,17 @@ info:
     manage conversations, send messages, and create groups. The API provides 
     comprehensive functionality for a modern messaging platform.
   version: "1.1"
-
 tags:
   - name: login
     description: Operations related to user login and authentication
   - name: user
     description: Operations related to user profile management
   - name: conversations
-    description: Operations related to managing conversations and messages
+    description: Operations related to managing conversations 
+  - name: messages
+    description: Operations related to Messages
   - name: groups
     description: Operations related to group management
-
-parameters:
-  conversationId:
-    name: conversationId
-    in: path
-    required: true
-    description: Unique identifier of the conversation
-    schema:
-      type: string
-      pattern: '^[0-9a-fA-F-]{36}$'
-      minLength: 36
-      maxLength: 36
-  
-  groupId:
-    name: groupId
-    in: path
-    required: true
-    description: Unique identifier of the group
-    schema:
-      type: string
-      pattern: '^[0-9a-fA-F-]{36}$'
-      minLength: 36
-      maxLength: 36
-  
-  messageId:
-    name: messageId
-    in: path
-    required: true
-    description: Unique identifier of the message
-    schema:
-      type: string
-      pattern: '^[0-9a-fA-F-]{36}$'
-      minLength: 36
-      maxLength: 36
 
 paths:
   /session:
@@ -101,7 +68,7 @@ paths:
     get:
       tags: ["user"]
       summary: Get list of all users
-      description: Retrieves a list of all users in the system that can be added to conversations or groups
+      description: Retrieves a list of all users in the system  
       operationId: getUsers
       parameters:
         - name: search
@@ -361,7 +328,16 @@ paths:
       description: Retrieves all messages within a specific conversation
       operationId: getConversation
       parameters:
-        - $ref: '#/parameters/conversationId'
+        - name: conversationId
+          in: path
+          required: true
+          description: Unique identifier of the conversation
+          schema:
+            type: string
+            description: Conversation ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
         - name: limit
           in: query
           description: Maximum number of messages to return
@@ -427,35 +403,6 @@ paths:
                       minLength: 4
                       maxLength: 7
                       pattern: .*
-                    comments:
-                      type: array
-                      description: Comments on the message
-                      items:
-                        type: object
-                        properties:
-                          commentId:
-                            type: string
-                            description: Unique identifier for the comment
-                            pattern: '^[0-9a-fA-F-]{36}$'
-                            minLength: 36
-                            maxLength: 36
-                          content:
-                            type: string
-                            description: Comment text
-                            minLength: 1
-                            maxLength: 1000
-                          sender:
-                            type: string
-                            description: Username of the comment sender
-                            pattern: '^[a-zA-Z0-9_-]*$'
-                            minLength: 3
-                            maxLength: 16
-                          timestamp:
-                            type: string
-                            description: Timestamp of the comment
-                            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
-                            minLength: 20
-                            maxLength: 20
                   additionalProperties: false
 
   /conversations/search:
@@ -577,7 +524,16 @@ paths:
       description: Deletes a specific message by its unique ID
       operationId: deleteMessage
       parameters:
-        - $ref: '#/parameters/messageId'
+        - name: messageId
+          in: path
+          required: true
+          description: Unique identifier of the message to delete
+          schema:
+            type: string
+            description: Message ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       responses:
         '200':
           description: Message deleted successfully
@@ -591,8 +547,6 @@ paths:
                     type: string
                     description: Success message for message deletion
                     example: "Message deleted successfully"
-                    minLength: 1
-                    maxLength: 100
                     pattern: .*
                 additionalProperties: false
         '404':
@@ -606,8 +560,6 @@ paths:
                     type: string
                     description: Error message for non-existent message
                     example: "Message not found."
-                    minLength: 1
-                    maxLength: 100
                     pattern: .*
                 additionalProperties: false
                     
@@ -618,7 +570,16 @@ paths:
       description: Forwards a specific message to another conversation
       operationId: forwardMessage
       parameters:
-        - $ref: '#/parameters/messageId'
+        - name: messageId
+          in: path
+          required: true
+          description: Unique identifier of the message to forward
+          schema:
+            type: string
+            description: Message ID to forward
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       requestBody:
         description: Destination conversation ID for message forwarding
         required: true
@@ -676,7 +637,16 @@ paths:
       description: Allows the user to add a comment to a specific message
       operationId: commentMessage
       parameters:
-        - $ref: '#/parameters/messageId'
+        - name: messageId
+          in: path
+          required: true
+          description: Unique identifier of the message to comment on
+          schema:
+            type: string
+            description: Message ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
       requestBody:
         description: Content of the comment to be added
         required: true
@@ -717,7 +687,16 @@ paths:
       description: Deletes a specific comment by its unique ID from a message
       operationId: uncommentMessage
       parameters:
-        - $ref: '#/parameters/messageId'
+        - name: messageId
+          in: path
+          required: true
+          description: Unique identifier of the message containing the comment
+          schema:
+            type: string
+            description: Message ID
+            pattern: '^[0-9a-fA-F-]{36}$'
+            minLength: 36
+            maxLength: 36
         - name: commentId
           in: query
           required: true
@@ -868,7 +847,7 @@ paths:
                     minLength: 36
                     maxLength: 36
                 additionalProperties: false
-                
+
   /groups/{groupId}:
     get:
       tags: ["groups"]
@@ -1191,3 +1170,10 @@ components:
 
 security:
   - BearerAuth: []
+
+                    
+                    
+                    
+                    
+                  
+                    
