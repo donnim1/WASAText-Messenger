@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ardanlabs/conf"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"ssh
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
