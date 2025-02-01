@@ -1,9 +1,9 @@
 /*
-Package api exposes the main API engine for the texting application. All HTTP APIs are handled here, and business
-logic should either be implemented in this package or delegated to specialized sub-packages for complex logic.
+Package api exposes the main API engine. All HTTP APIs are handled here - so-called "business logic" should be here, or
+in a dedicated package (if that logic is complex enough).
 
-To use this package, create a new instance with `New()` by passing a valid `Config`. The resulting Router will provide
-the `Handler()` function to return an HTTP handler suitable for use with an `http.Server` or middleware.
+To use this package, you should create a new instance with New() passing a valid Config. The resulting Router will have
+the Router.Handler() function that returns a handler that can be used in a http.Server (or in other middlewares).
 
 Example:
 
@@ -18,48 +18,53 @@ Example:
 	}
 	router := apirouter.Handler()
 
+	// ... other stuff here, like middleware chaining, etc.
+
 	// Create the API server
 	apiserver := http.Server{
 		Addr:              cfg.Web.APIHost,
 		Handler:           router,
 		ReadTimeout:       cfg.Web.ReadTimeout,
+		ReadHeaderTimeout: cfg.Web.ReadTimeout,
 		WriteTimeout:      cfg.Web.WriteTimeout,
 	}
 
 	// Start the service listening for requests in a separate goroutine
 	apiserver.ListenAndServe()
+
+See the `main.go` file inside the `cmd/webapi` for a full usage example.
 */
 package api
 
 import (
 	"errors"
-	"net/http"
-
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
 	"github.com/julienschmidt/httprouter"
 	"github.com/sirupsen/logrus"
-	"github.com/donnim1/WASAText/service/database"
+	"net/http"
 )
 
-// Config provides dependencies and configuration for the API.
+// Config is used to provide dependencies and configuration to the New function.
 type Config struct {
-	// Logger to record log entries
+	// Logger where log entries are sent
 	Logger logrus.FieldLogger
 
-	// Database instance to persist application data
+	// Database is the instance of database.AppDatabase where data are saved
 	Database database.AppDatabase
 }
 
-// Router represents the API interface for handling HTTP requests.
+// Router is the package API interface representing an API handler builder
 type Router interface {
-	// Handler returns the HTTP handler for this package's APIs
+	// Handler returns an HTTP handler for APIs provided in this package
 	Handler() http.Handler
 
-	// Close releases any resources used by the package
+	// Close terminates any resource used in the package
 	Close() error
 }
 
-// New creates and returns a new Router instance.
+// New returns a new Router instance
 func New(cfg Config) (Router, error) {
+	// Check if the configuration is correct
 	if cfg.Logger == nil {
 		return nil, errors.New("logger is required")
 	}
@@ -67,7 +72,8 @@ func New(cfg Config) (Router, error) {
 		return nil, errors.New("database is required")
 	}
 
-	// Create a new router for HTTP endpoints
+	// Create a new router where we will register HTTP endpoints. The server will pass requests to this router to be
+	// handled.
 	router := httprouter.New()
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false
@@ -82,19 +88,9 @@ func New(cfg Config) (Router, error) {
 type _router struct {
 	router *httprouter.Router
 
-	// baseLogger logs messages outside of request contexts (e.g., background tasks).
+	// baseLogger is a logger for non-requests contexts, like goroutines or background tasks not started by a request.
+	// Use context logger if available (e.g., in requests) instead of this logger.
 	baseLogger logrus.FieldLogger
 
 	db database.AppDatabase
-}
-
-// Handler provides the HTTP handler for API endpoints.
-func (r *_router) Handler() http.Handler {
-	return r.router
-}
-
-// Close releases any resources used by the router.
-func (r *_router) Close() error {
-	// Close database connections or cleanup tasks here, if needed.
-	return nil
 }

@@ -1,28 +1,21 @@
-// cmd/webapi/cors.go
-package webapi
+package main
 
 import (
 	"github.com/gorilla/handlers"
 	"net/http"
 )
 
-// SetupCORS applies a CORS policy to the router. CORS (Cross-Origin Resource Sharing) is a security
-// feature that blocks JavaScript requests going across different domains unless specified in a policy.
-// This function sends the CORS policy for the texting application API.
-func SetupCORS(handler http.Handler) http.Handler {
+// applyCORSHandler applies a CORS policy to the router. CORS stands for Cross-Origin Resource Sharing: it's a security
+// feature present in web browsers that blocks JavaScript requests going across different domains if not specified in a
+// policy. This function sends the policy of this API server.
+func applyCORSHandler(h http.Handler) http.Handler {
 	return handlers.CORS(
 		handlers.AllowedHeaders([]string{
-			"Content-Type",
-			"Authorization",
+			"x-example-header",
 		}),
-		handlers.AllowedMethods([]string{
-			"GET",
-			"POST",
-			"PUT",
-			"DELETE",
-			"OPTIONS",
-		}),
-		handlers.AllowedOrigins([]string{"*"}), // Allow all origins for now. Update as needed for security.
-		handlers.MaxAge(86400), // Cache the CORS preflight request for 1 day (86400 seconds).
-	)(handler)
+		handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS", "DELETE", "PUT"}),
+		// Do not modify the CORS origin and max age, they are used in the evaluation.
+		handlers.AllowedOrigins([]string{"*"}),
+		handlers.MaxAge(1),
+	)(h)
 }
