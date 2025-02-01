@@ -1,11 +1,12 @@
 package api
 
 import (
-	"github.com/donnim1/WASAText.git"
+	"net/http"
+
+	"github.com/donnim1/WASAText/service/api/reqcontext"
 	"github.com/gofrs/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
 // httpRouterHandler is the signature for functions that accepts a reqcontext.RequestContext in addition to those
