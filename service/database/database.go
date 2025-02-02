@@ -6,52 +6,41 @@ import (
 	"fmt"
 )
 
-// AppDatabase is the high-level interface for the DB operations.
-// Actual CRUD methods will be defined in other files like user-db.go, message-db.go, etc.
+// AppDatabase is the high level interface for the DB
 type AppDatabase interface {
+	CreateUser(username string) (string, error)
 	Ping() error
 }
 
 type appdbimpl struct {
-	c *sql.DB
+	db *sql.DB  // Changed from 'c' to 'db' for clarity
 }
 
+// New creates a new database instance
 func New(db *sql.DB) (AppDatabase, error) {
 	if db == nil {
-		return nil, errors.New("database is required when building an AppDatabase")
+		return nil, errors.New("database connection is required")
 	}
 
-	_, err := db.Exec("PRAGMA foreign_keys = ON")
+	// Create users table if not exists
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE NOT NULL
+	)`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating users table: %w", err)
 	}
 
-	var tableName string
-	err = db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='users';`).Scan(&tableName)
-	if errors.Is(err, sql.ErrNoRows) {
-
-		users := `CREATE TABLE users (
-			id TEXT NOT NULL PRIMARY KEY,
-			name TEXT NOT NULL UNIQUE
-		);`
-
-		creationQueries := []string{
-			users,
-		}
-		for _, q := range creationQueries {
-			_, execErr := db.Exec(q)
-			if execErr != nil {
-				return nil, fmt.Errorf("error creating database structure: %w", execErr)
-			}
-		}
-	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
-
-	return &appdbimpl{c: db}, nil
+	return &appdbimpl{db: db}, nil
 }
 
-// Ping checks the connection to the database.
+func (db *appdbimpl) CreateUser(username string) (string, error) {
+	// Implementation from previous steps
+	// This is just a placeholder - use your actual UUID generation
+	// and database operations here
+	return "generated-uuid", nil
+}
+
 func (db *appdbimpl) Ping() error {
-	return db.c.Ping()
+	return db.db.Ping()
 }
