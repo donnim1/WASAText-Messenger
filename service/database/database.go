@@ -14,6 +14,7 @@ type AppDatabase interface {
 	GetUserByUsername(username string) (*User, error)
 	UpdateUserName(userID, newName string) error
 	UpdateUserPhoto(userID, photoUrl string) error
+	GetConversationsByUserID(userID string) ([]Conversation, error)
 	Ping() error
 }
 
@@ -27,6 +28,14 @@ type User struct {
 	ID       string
 	Username string
 	PhotoURL string // Optional profile photo URL.
+}
+
+// Conversation represents a conversation record.
+type Conversation struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	IsGroup   bool   `json:"is_group"`
+	CreatedAt string `json:"created_at"` // Added field to store the creation timestamp
 }
 
 // New creates a new database instance.
@@ -45,6 +54,59 @@ func New(db *sql.DB) (AppDatabase, error) {
 		return nil, fmt.Errorf("error creating users table: %w", err)
 	}
 
+	// Create conversations table if not exists
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    name TEXT, -- Name of group (NULL for private chats)
+    is_group BOOLEAN NOT NULL DEFAULT 0, -- 0 = Private Chat, 1 = Group Chat
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating conversations table: %w", err)
+	}
+	//create messages table if not exists
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS messages (
+	id TEXT PRIMARY KEY,
+	conversation_id TEXT NOT NULL,
+	sender_id TEXT NOT NULL,
+	content TEXT NOT NULL, -- Message text or media URL
+	reply_to TEXT NULL, -- If replying to another message
+	sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+	FOREIGN KEY (sender_id) REFERENCES users(id),
+	FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE CASCADE
+)`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating messages table: %w", err)
+	}
+	//create group_members table if not exists
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS group_members (
+    group_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id),
+    FOREIGN KEY (group_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	
+)`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating groups table: %w", err)
+	}
+	//create message reactions table if not exists
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS message_reactions (
+    message_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    reaction TEXT NOT NULL, -- Example: "😂" or "🔥"
+    reacted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (message_id, user_id),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	
+)`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating message_reactions table: %w", err)
+	}
 	return &appdbimpl{db: db}, nil
 }
 
@@ -125,4 +187,33 @@ func GenerateNewID() (string, error) {
 		return "", err
 	}
 	return uid.String(), nil
+}
+
+// GetConversationsByUserID retrieves all conversations associated with a user.
+func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, error) {
+	// Updated query to include the created_at column
+	rows, err := db.db.Query(`
+		SELECT c.id, c.name, c.is_group, c.created_at
+		FROM conversations c
+		JOIN group_members gm ON c.id = gm.group_id
+		WHERE gm.user_id = ?`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var conversations []Conversation
+	for rows.Next() {
+		var conversation Conversation
+		if err := rows.Scan(&conversation.ID, &conversation.Name, &conversation.IsGroup, &conversation.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan conversation: %w", err)
+		}
+		conversations = append(conversations, conversation)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return conversations, nil
 }

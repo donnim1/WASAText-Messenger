@@ -15,7 +15,8 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.PUT("/user/username", rt.setMyUserName)
 	rt.router.PUT("/user/photo", rt.setMyPhoto)
 
-	//rt.router.GET()
+	rt.router.GET("/conversation/myconversations", rt.getMyConversations)
+
 
 	// Special routes
 	rt.router.GET("/liveness", rt.liveness)

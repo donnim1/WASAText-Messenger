@@ -1,0 +1,61 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/julienschmidt/httprouter"
+)
+
+// GetMyConversationsRequest defines the expected request for fetching a user's conversations.
+type getMyConversationsRequest struct {
+	UserID string `json:"id"` // User identifier (in real scenario, fetched from JWT or session)
+}
+
+// GetMyConversationsResponse defines the structure of the response after fetching the conversations.
+type getMyConversationsResponse struct {
+	Conversations []Conversation `json:"conversations"`
+}
+
+// Conversation defines a structure for each conversation in the response.
+type Conversation struct {
+	ID        string `json:"id"`        // Conversation ID
+	Name      string `json:"name"`      // Name of the conversation (group name or null for private chats)
+	IsGroup   bool   `json:"is_group"`  // True if it's a group chat, otherwise false
+	CreatedAt string `json:"created_at"` // Timestamp of when the conversation was created
+}
+
+// getMyConversations retrieves all the conversations for a given user.
+func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// 1. Extract userID from request (it would typically be from JWT or session)
+	var req getMyConversationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Fetch conversations from the database
+	conversations, err := rt.db.GetConversationsByUserID(req.UserID)
+	if err != nil {
+		http.Error(w, "Failed to retrieve conversations: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Convert database.Conversation to api.Conversation
+	var apiConversations []Conversation
+	for _, conv := range conversations {
+		apiConversations = append(apiConversations, Conversation{
+			ID:        conv.ID,
+			Name:      conv.Name,
+			IsGroup:   conv.IsGroup,
+			CreatedAt: conv.CreatedAt, // Ensure this is part of the db.Conversation
+		})
+	}
+
+	// 4. Return the list of conversations
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(getMyConversationsResponse{
+		Conversations: apiConversations,
+	})
+}
