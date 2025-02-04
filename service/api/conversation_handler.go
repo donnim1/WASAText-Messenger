@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/donnim1/WASAText/service/database"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -19,9 +20,9 @@ type getMyConversationsResponse struct {
 
 // Conversation defines a structure for each conversation in the response.
 type Conversation struct {
-	ID        string `json:"id"`        // Conversation ID
-	Name      string `json:"name"`      // Name of the conversation (group name or null for private chats)
-	IsGroup   bool   `json:"is_group"`  // True if it's a group chat, otherwise false
+	ID        string `json:"id"`         // Conversation ID
+	Name      string `json:"name"`       // Name of the conversation (group name or null for private chats)
+	IsGroup   bool   `json:"is_group"`   // True if it's a group chat, otherwise false
 	CreatedAt string `json:"created_at"` // Timestamp of when the conversation was created
 }
 
@@ -58,4 +59,39 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 	json.NewEncoder(w).Encode(getMyConversationsResponse{
 		Conversations: apiConversations,
 	})
+}
+
+// getConversation handles GET requests to /conversations/:conversationId.
+func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	conversationID := ps.ByName("conversationId")
+	if conversationID == "" {
+		http.Error(w, "Conversation ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Call the database function to get conversation details and messages.
+	conv, messages, err := rt.db.GetConversation(conversationID)
+	if err != nil {
+		http.Error(w, "Failed to retrieve conversation: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if conversation was found.
+	if conv == nil {
+		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+
+	// Build the response.
+	response := struct {
+		Conversation *database.Conversation `json:"conversation"`
+		Messages     []database.Message     `json:"messages"`
+	}{
+		Conversation: conv,
+		Messages:     messages,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }

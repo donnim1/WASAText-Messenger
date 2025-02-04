@@ -15,6 +15,12 @@ type AppDatabase interface {
 	UpdateUserName(userID, newName string) error
 	UpdateUserPhoto(userID, photoUrl string) error
 	GetConversationsByUserID(userID string) ([]Conversation, error)
+	GetConversation(conversationID string) (*Conversation, []Message, error)
+	SendMessage(conversationID, senderID, content, replyTo string) (string, error)
+	ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error)
+	CommentMessage(messageID, userID, reaction string) error
+	UncommentMessage(messageID, userID string) error
+	DeleteMessage(messageID, senderID string) error
 	Ping() error
 }
 
@@ -36,6 +42,50 @@ type Conversation struct {
 	Name      string `json:"name"`
 	IsGroup   bool   `json:"is_group"`
 	CreatedAt string `json:"created_at"` // Added field to store the creation timestamp
+}
+
+type Message struct {
+	ID             string
+	ConversationID string
+	SenderID       string
+	Content        string
+	ReplyTo        sql.NullString // use NullString if replies are optional
+	SentAt         string         // using string for simplicity; you may use time.Time
+}
+
+// GetConversation retrieves a conversation and all its messages.
+func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Message, error) {
+	// Retrieve conversation details.
+	var conv Conversation
+	err := db.db.QueryRow("SELECT id, name, is_group, created_at FROM conversations WHERE id = ?", conversationID).
+		Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil, nil // Conversation not found.
+	} else if err != nil {
+		return nil, nil, fmt.Errorf("failed to retrieve conversation: %w", err)
+	}
+
+	// Retrieve messages for this conversation.
+	rows, err := db.db.Query("SELECT id, conversation_id, sender_id, content, reply_to, sent_at FROM messages WHERE conversation_id = ? ORDER BY sent_at ASC", conversationID)
+	if err != nil {
+		return &conv, nil, fmt.Errorf("failed to retrieve messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []Message
+	for rows.Next() {
+		var msg Message
+		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.ReplyTo, &msg.SentAt); err != nil {
+			return &conv, messages, fmt.Errorf("failed to scan message: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	if err = rows.Err(); err != nil {
+		return &conv, messages, fmt.Errorf("error iterating messages: %w", err)
+	}
+
+	return &conv, messages, nil
 }
 
 // New creates a new database instance.
@@ -216,4 +266,79 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 	}
 
 	return conversations, nil
+}
+
+// SendMessage inserts a new message into the messages table.
+func (db *appdbimpl) SendMessage(conversationID, senderID, content, replyTo string) (string, error) {
+	// Generate a new UUID for the message.
+	messageID, err := GenerateNewID()
+	if err != nil {
+		return "", fmt.Errorf("failed to create message id: %w", err)
+	}
+
+	// Insert the message into the database.
+	_, err = db.db.Exec(
+		"INSERT INTO messages (id, conversation_id, sender_id, content, reply_to) VALUES (?, ?, ?, ?, ?)",
+		messageID, conversationID, senderID, content, replyTo,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to send message: %w", err)
+	}
+
+	return messageID, nil
+}
+
+// ForwardMessage retrieves the original message content and inserts it as a new message in the target conversation.
+func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
+	// Retrieve the original message's content.
+	var content string
+	err := db.db.QueryRow("SELECT content FROM messages WHERE id = ?", originalMessageID).Scan(&content)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve original message: %w", err)
+	}
+
+	// Use SendMessage to insert the message into the target conversation.
+	return db.SendMessage(targetConversationID, senderID, content, "")
+}
+
+// CommentMessage inserts a reaction (comment) for a message into the message_reactions table.
+func (db *appdbimpl) CommentMessage(messageID, userID, reaction string) error {
+	// Insert the reaction. Using INSERT OR REPLACE to allow updating an existing reaction.
+	_, err := db.db.Exec(
+		"INSERT OR REPLACE INTO message_reactions (message_id, user_id, reaction) VALUES (?, ?, ?)",
+		messageID, userID, reaction,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to add comment: %w", err)
+	}
+	return nil
+}
+
+// UncommentMessage removes a reaction (comment) for a message from the message_reactions table.
+func (db *appdbimpl) UncommentMessage(messageID, userID string) error {
+	_, err := db.db.Exec(
+		"DELETE FROM message_reactions WHERE message_id = ? AND user_id = ?",
+		messageID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to remove comment: %w", err)
+	}
+	return nil
+}
+
+// DeleteMessage removes a message from the messages table. (In a real system, you might also mark it as deleted.)
+func (db *appdbimpl) DeleteMessage(messageID, senderID string) error {
+	// Optionally verify that the sender is the one deleting the message.
+	res, err := db.db.Exec("DELETE FROM messages WHERE id = ? AND sender_id = ?", messageID, senderID)
+	if err != nil {
+		return fmt.Errorf("failed to delete message: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to delete message: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("no message deleted (perhaps invalid message ID or sender mismatch)")
+	}
+	return nil
 }
