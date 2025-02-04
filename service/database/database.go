@@ -14,13 +14,21 @@ type AppDatabase interface {
 	GetUserByUsername(username string) (*User, error)
 	UpdateUserName(userID, newName string) error
 	UpdateUserPhoto(userID, photoUrl string) error
+
 	GetConversationsByUserID(userID string) ([]Conversation, error)
 	GetConversation(conversationID string) (*Conversation, []Message, error)
-	SendMessage(conversationID, senderID, content, replyTo string) (string, error)
+
+	SendMessage(senderID string, receiverID string, content string, isGroup bool, groupID string) (string, error)
 	ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error)
 	CommentMessage(messageID, userID, reaction string) error
 	UncommentMessage(messageID, userID string) error
 	DeleteMessage(messageID, senderID string) error
+
+	AddToGroup(groupID, userID string) error
+	LeaveGroup(groupID, userID string) error
+	SetGroupName(groupID, newName string) error
+	SetGroupPhoto(groupID, photoUrl string) error
+
 	Ping() error
 }
 
@@ -106,11 +114,13 @@ func New(db *sql.DB) (AppDatabase, error) {
 
 	// Create conversations table if not exists
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS conversations (
-    id TEXT PRIMARY KEY,
-    name TEXT, -- Name of group (NULL for private chats)
-    is_group BOOLEAN NOT NULL DEFAULT 0, -- 0 = Private Chat, 1 = Group Chat
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)`)
+		id TEXT PRIMARY KEY,
+		name TEXT, -- Name of group (NULL for private chats)
+		is_group BOOLEAN NOT NULL DEFAULT 0, -- 0 = Private Chat, 1 = Group Chat
+		group_photo TEXT, -- New column for the group photo URL
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+
 	if err != nil {
 		return nil, fmt.Errorf("error creating conversations table: %w", err)
 	}
@@ -158,6 +168,7 @@ func New(db *sql.DB) (AppDatabase, error) {
 		return nil, fmt.Errorf("error creating message_reactions table: %w", err)
 	}
 	return &appdbimpl{db: db}, nil
+
 }
 
 // CreateUser inserts a new user.
@@ -268,37 +279,83 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 	return conversations, nil
 }
 
-// SendMessage inserts a new message into the messages table.
-func (db *appdbimpl) SendMessage(conversationID, senderID, content, replyTo string) (string, error) {
-	// Generate a new UUID for the message.
-	messageID, err := GenerateNewID()
-	if err != nil {
-		return "", fmt.Errorf("failed to create message id: %w", err)
+/// SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
+func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, error) {
+	var conversationID string
+
+	// **1. Check if conversation exists**
+	if isGroup {
+		// If it's a group, use the group ID as the conversation ID
+		conversationID = groupID
+	} else {
+		// For private messages, check if a conversation already exists
+		query := `
+			SELECT id FROM conversations 
+			WHERE is_group = 0 
+			AND id IN (
+				SELECT group_id FROM group_members 
+				WHERE user_id IN (?, ?)
+				GROUP BY group_id HAVING COUNT(user_id) = 2
+			)
+			LIMIT 1;
+		`
+		err := db.db.QueryRow(query, senderID, receiverID).Scan(&conversationID)
+		if err == sql.ErrNoRows {
+			// **2. If conversation does not exist, create a new one**
+			conversationID, _ = GenerateNewID() // Generate a new UUID
+			_, err = db.db.Exec("INSERT INTO conversations (id, name, is_group) VALUES (?, NULL, 0)", conversationID)
+			if err != nil {
+				return "", fmt.Errorf("failed to create conversation: %w", err)
+			}
+
+			// Add both users to the `group_members` table
+			_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?), (?, ?)", conversationID, senderID, conversationID, receiverID)
+			if err != nil {
+				return "", fmt.Errorf("failed to add users to group_members: %w", err)
+			}
+		} else if err != nil {
+			return "", fmt.Errorf("error checking conversation: %w", err)
+		}
 	}
 
-	// Insert the message into the database.
-	_, err = db.db.Exec(
-		"INSERT INTO messages (id, conversation_id, sender_id, content, reply_to) VALUES (?, ?, ?, ?, ?)",
-		messageID, conversationID, senderID, content, replyTo,
-	)
+	// **3. Insert message into messages table**
+	messageID, _ := GenerateNewID()
+	_, err := db.db.Exec("INSERT INTO messages (id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)",
+		messageID, conversationID, senderID, content)
 	if err != nil {
-		return "", fmt.Errorf("failed to send message: %w", err)
+		return "", fmt.Errorf("failed to insert message: %w", err)
 	}
 
 	return messageID, nil
 }
 
-// ForwardMessage retrieves the original message content and inserts it as a new message in the target conversation.
+
+// ForwardMessage forwards a message to another conversation.
 func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
-	// Retrieve the original message's content.
-	var content string
-	err := db.db.QueryRow("SELECT content FROM messages WHERE id = ?", originalMessageID).Scan(&content)
-	if err != nil {
+	// Retrieve the original message.
+	var originalMessage Message
+	err := db.db.QueryRow("SELECT content, reply_to FROM messages WHERE id = ?", originalMessageID).
+		Scan(&originalMessage.Content, &originalMessage.ReplyTo)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("original message not found")
+	} else if err != nil {
 		return "", fmt.Errorf("failed to retrieve original message: %w", err)
 	}
 
-	// Use SendMessage to insert the message into the target conversation.
-	return db.SendMessage(targetConversationID, senderID, content, "")
+	// Generate a new ID for the forwarded message.
+	newMessageID, err := GenerateNewID()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate new message ID: %w", err)
+	}
+
+	// Insert the forwarded message into the messages table.
+	_, err = db.db.Exec("INSERT INTO messages (id, conversation_id, sender_id, content, reply_to) VALUES (?, ?, ?, ?, ?)",
+		newMessageID, targetConversationID, senderID, originalMessage.Content, originalMessage.ReplyTo)
+	if err != nil {
+		return "", fmt.Errorf("failed to forward message: %w", err)
+	}
+
+	return newMessageID, nil
 }
 
 // CommentMessage inserts a reaction (comment) for a message into the message_reactions table.
@@ -339,6 +396,51 @@ func (db *appdbimpl) DeleteMessage(messageID, senderID string) error {
 	}
 	if affected == 0 {
 		return fmt.Errorf("no message deleted (perhaps invalid message ID or sender mismatch)")
+	}
+	return nil
+}
+
+// AddToGroup adds a user to a group by inserting a record into the group_members table.
+func (db *appdbimpl) AddToGroup(groupID, userID string) error {
+	_, err := db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", groupID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to add user to group: %w", err)
+	}
+	return nil
+}
+
+// LeaveGroup removes a user from a group.
+func (db *appdbimpl) LeaveGroup(groupID, userID string) error {
+	res, err := db.db.Exec("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", groupID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to remove user from group: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to remove user from group: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("user not a member of the group")
+	}
+	return nil
+}
+
+// SetGroupName updates the name of a group (in the conversations table).
+func (db *appdbimpl) SetGroupName(groupID, newName string) error {
+	// Only update if the conversation is a group (is_group = 1)
+	_, err := db.db.Exec("UPDATE conversations SET name = ? WHERE id = ? AND is_group = 1", newName, groupID)
+	if err != nil {
+		return fmt.Errorf("failed to update group name: %w", err)
+	}
+	return nil
+}
+
+// SetGroupPhoto updates the group photo for a group conversation.
+// Ensure that your conversations table has a column called group_photo.
+func (db *appdbimpl) SetGroupPhoto(groupID, photoUrl string) error {
+	_, err := db.db.Exec("UPDATE conversations SET group_photo = ? WHERE id = ? AND is_group = 1", photoUrl, groupID)
+	if err != nil {
+		return fmt.Errorf("failed to update group photo: %w", err)
 	}
 	return nil
 }

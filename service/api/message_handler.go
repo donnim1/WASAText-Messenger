@@ -7,37 +7,48 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// sendMessageRequest defines the expected payload for sending a message.
-type sendMessageRequest struct {
-	ConversationID string `json:"conversationId"`
-	SenderID       string `json:"senderId"`
-	Content        string `json:"content"`
-	ReplyTo        string `json:"replyTo,omitempty"` // Optional field
+// MessageRequest defines the request format for sending a message.
+type MessageRequest struct {
+	SenderID   string `json:"senderId"`   // Who is sending the message
+	ReceiverID string `json:"receiverId"` // Who is receiving (for private chats)
+	Content    string `json:"content"`    // Message content
+	IsGroup    bool   `json:"isGroup"`    // True for group messages
+	GroupID    string `json:"groupId"`    // Group ID if sending in a group
 }
 
-// sendMessageResponse defines the response for sending a message.
-type sendMessageResponse struct {
+// MessageResponse defines the response format.
+type MessageResponse struct {
 	MessageID string `json:"messageId"`
 }
 
-// sendMessage handles POST /message to send a new message.
+// sendMessage handles sending a message and auto-creates a conversation if needed.
 func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var req sendMessageRequest
+	// 1. Parse request body
+	var req MessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
 
-	// Insert the new message.
-	messageID, err := rt.db.SendMessage(req.ConversationID, req.SenderID, req.Content, req.ReplyTo)
+	// 2. Validate request
+	if req.SenderID == "" || req.Content == "" || (!req.IsGroup && req.ReceiverID == "") {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// 3. Call database function to send message
+	messageID, err := rt.db.SendMessage(req.SenderID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID)
 	if err != nil {
 		http.Error(w, "Failed to send message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// 4. Return response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(sendMessageResponse{MessageID: messageID})
+	json.NewEncoder(w).Encode(MessageResponse{
+		MessageID: messageID,
+	})
 }
 
 // forwardMessageRequest defines the payload for forwarding a message.

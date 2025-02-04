@@ -19,12 +19,16 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.GET("/conversations/:conversationId", rt.getConversation)
 
 	rt.router.POST("/message", rt.sendMessage)
-    rt.router.POST("/message/:messageId/forward", rt.forwardMessage)
-    rt.router.POST("/message/:messageId/comment", rt.commentMessage)
-    rt.router.DELETE("/message/:messageId/comment", rt.uncommentMessage)
-    rt.router.DELETE("/message/:messageId", rt.deleteMessage)
+	rt.router.POST("/message/:messageId/forward", rt.forwardMessage)
+	rt.router.POST("/message/:messageId/comment", rt.commentMessage)
+	rt.router.DELETE("/message/:messageId/comment", rt.uncommentMessage)
+	rt.router.DELETE("/message/:messageId", rt.deleteMessage)
 
-
+	// Group endpoints
+	rt.router.POST("/groups/add", rt.addToGroup)
+	rt.router.DELETE("/groups/leave", rt.leaveGroup)
+	rt.router.PUT("/groups/name", rt.setGroupName)
+	rt.router.PUT("/groups/photo", rt.setGroupPhoto)
 
 	// Special routes
 	rt.router.GET("/liveness", rt.liveness)
