@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
@@ -46,9 +47,12 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprou
 	// 4. Return response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(MessageResponse{
+	if err := json.NewEncoder(w).Encode(MessageResponse{
 		MessageID: messageID,
-	})
+	}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // forwardMessageRequest defines the payload for forwarding a message.
@@ -80,7 +84,10 @@ func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps htt
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"messageId": newMessageID})
+	if err := json.NewEncoder(w).Encode(map[string]string{"messageId": newMessageID}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // commentMessageRequest defines the payload for commenting (reacting) on a message.
@@ -116,7 +123,10 @@ func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps htt
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Comment added successfully"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Comment added successfully"}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // uncommentMessage handles DELETE /message/:messageId/comment to remove a reaction.
@@ -141,7 +151,10 @@ func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps h
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Comment removed successfully"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Comment removed successfully"}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // deleteMessage handles DELETE /message/:messageId to delete a message.
@@ -169,5 +182,8 @@ func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps http
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Message deleted successfully"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Message deleted successfully"}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }

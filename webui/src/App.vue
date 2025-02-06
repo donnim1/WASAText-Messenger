@@ -25,16 +25,16 @@ import Login from './components/Login.vue'
 const userID = ref(localStorage.getItem('userID') || '')
 const router = useRouter()
 
+// When a user logs in, store their ID and update our reactive variable
 function handleLogin(id) {
   localStorage.setItem('userID', id)
   userID.value = id
 }
 
+// Logout clears the stored userID and navigates to the login route
 function logout() {
-  // Simply clear the stored userID. This logs the user out.
   localStorage.removeItem('userID')
   userID.value = ''
-  // Optionally, navigate to a dedicated login route or refresh the page.
   router.push('/login')
 }
 </script>

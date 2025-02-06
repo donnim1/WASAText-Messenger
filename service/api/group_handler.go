@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
@@ -30,7 +31,10 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, _ httprout
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "User added to group successfully"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "User added to group successfully"}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // leaveGroupRequest defines the expected JSON payload for leaving a group.
@@ -56,7 +60,10 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, _ httprout
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Left group successfully"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Left group successfully"}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // setGroupNameRequest defines the expected JSON payload for updating a group's name.
@@ -82,7 +89,10 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, _ httpro
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Group name updated successfully"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Group name updated successfully"}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // setGroupPhotoRequest defines the expected JSON payload for updating a group's photo.
@@ -108,5 +118,8 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, _ httpr
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Group photo updated successfully"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Group photo updated successfully"}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }

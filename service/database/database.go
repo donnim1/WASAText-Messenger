@@ -41,7 +41,7 @@ type appdbimpl struct {
 type User struct {
 	ID       string
 	Username string
-	PhotoURL string // Optional profile photo URL.
+	PhotoURL sql.NullString // Now handles NULL values // Optional profile photo URL.
 }
 
 // Conversation represents a conversation record.
@@ -67,7 +67,7 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 	var conv Conversation
 	err := db.db.QueryRow("SELECT id, name, is_group, created_at FROM conversations WHERE id = ?", conversationID).
 		Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil // Conversation not found.
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve conversation: %w", err)
@@ -194,9 +194,10 @@ func (db *appdbimpl) GetUserByUsername(username string) (*User, error) {
 
 	var user User
 	err := row.Scan(&user.ID, &user.Username, &user.PhotoURL)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil // User does not exist.
 	} else if err != nil {
+		// Log the error for debugging.
 		return nil, fmt.Errorf("failed to retrieve user: %w", err)
 	}
 
@@ -208,7 +209,7 @@ func (db *appdbimpl) UpdateUserName(userID, newName string) error {
 	// Check if the new username is already taken.
 	var existingID string
 	err := db.db.QueryRow("SELECT id FROM users WHERE username = ?", newName).Scan(&existingID)
-	if err != sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		if err == nil {
 			// Username already exists.
 			return errors.New("username already exists")
@@ -279,7 +280,7 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 	return conversations, nil
 }
 
-/// SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
+// / SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
 func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, error) {
 	var conversationID string
 
@@ -300,7 +301,7 @@ func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup b
 			LIMIT 1;
 		`
 		err := db.db.QueryRow(query, senderID, receiverID).Scan(&conversationID)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// **2. If conversation does not exist, create a new one**
 			conversationID, _ = GenerateNewID() // Generate a new UUID
 			_, err = db.db.Exec("INSERT INTO conversations (id, name, is_group) VALUES (?, NULL, 0)", conversationID)
@@ -329,14 +330,13 @@ func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup b
 	return messageID, nil
 }
 
-
 // ForwardMessage forwards a message to another conversation.
 func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
 	// Retrieve the original message.
 	var originalMessage Message
 	err := db.db.QueryRow("SELECT content, reply_to FROM messages WHERE id = ?", originalMessageID).
 		Scan(&originalMessage.Content, &originalMessage.ReplyTo)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("original message not found")
 	} else if err != nil {
 		return "", fmt.Errorf("failed to retrieve original message: %w", err)

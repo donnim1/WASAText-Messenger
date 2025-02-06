@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
@@ -45,9 +46,12 @@ func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, _ httpr
 	// 4. Return a success response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(userNameUpdateResponse{
+	if err := json.NewEncoder(w).Encode(userNameUpdateResponse{
 		Message: "Username updated successfully",
-	})
+	}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // userPhotoUpdateRequest defines the expected JSON payload for updating the user photo.
@@ -86,7 +90,11 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 	// 4. Return a success response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(userPhotoUpdateResponse{
+	if err := json.NewEncoder(w).Encode(userPhotoUpdateResponse{
 		Message: "Photo updated successfully",
-	})
+	}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
+
 }

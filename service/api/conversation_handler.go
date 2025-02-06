@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/donnim1/WASAText/service/database"
@@ -56,9 +57,13 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 	// 4. Return the list of conversations
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(getMyConversationsResponse{
+	if err := json.NewEncoder(w).Encode(getMyConversationsResponse{
 		Conversations: apiConversations,
-	})
+	}); err != nil {
+		// Log the error. The response is already sent, so this is only for debugging.
+		log.Printf("Error encoding response: %v", err)
+	}
+
 }
 
 // getConversation handles GET requests to /conversations/:conversationId.
@@ -93,5 +98,9 @@ func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps ht
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Log the error if encoding fails (the response is already written).
+		// In a production system, you might want to handle this differently.
+		log.Printf("Error encoding response: %v", err)
+	}
 }
