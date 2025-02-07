@@ -24,6 +24,13 @@ type MessageResponse struct {
 
 // sendMessage handles sending a message and auto-creates a conversation if needed.
 func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+
+	// Validate the Authorization header
+	userID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	// 1. Parse request body
 	var req MessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -32,13 +39,13 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 
 	// 2. Validate request
-	if req.SenderID == "" || req.Content == "" || (!req.IsGroup && req.ReceiverID == "") {
+	if userID == "" || req.Content == "" || (!req.IsGroup && req.ReceiverID == "") {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
 	// 3. Call database function to send message
-	messageID, err := rt.db.SendMessage(req.SenderID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID)
+	messageID, err := rt.db.SendMessage(userID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID)
 	if err != nil {
 		http.Error(w, "Failed to send message: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -63,6 +70,13 @@ type forwardMessageRequest struct {
 
 // forwardMessage handles POST /message/:messageId/forward to forward an existing message.
 func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+
+	userID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	originalMessageID := ps.ByName("messageId")
 	if originalMessageID == "" {
 		http.Error(w, "Message ID is required", http.StatusBadRequest)
@@ -76,7 +90,7 @@ func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps htt
 	}
 
 	// Forward the message.
-	newMessageID, err := rt.db.ForwardMessage(originalMessageID, req.TargetConversationID, req.SenderID)
+	newMessageID, err := rt.db.ForwardMessage(originalMessageID, req.TargetConversationID, userID)
 	if err != nil {
 		http.Error(w, "Failed to forward message: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -98,6 +112,13 @@ type commentMessageRequest struct {
 
 // commentMessage handles POST /message/:messageId/comment to add a reaction.
 func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+
+	userID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	messageID := ps.ByName("messageId")
 	if messageID == "" {
 		http.Error(w, "Message ID is required", http.StatusBadRequest)
@@ -116,7 +137,7 @@ func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps htt
 	}
 
 	// Insert the reaction.
-	err := rt.db.CommentMessage(messageID, req.UserID, req.Reaction)
+	err = rt.db.CommentMessage(messageID, userID, req.Reaction)
 	if err != nil {
 		http.Error(w, "Failed to add comment: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -131,20 +152,21 @@ func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps htt
 
 // uncommentMessage handles DELETE /message/:messageId/comment to remove a reaction.
 func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	// Validate the Authorization header and get the authenticated user ID.
+	userID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	messageID := ps.ByName("messageId")
 	if messageID == "" {
 		http.Error(w, "Message ID is required", http.StatusBadRequest)
 		return
 	}
 
-	// Assume the user ID is provided as a query parameter for simplicity.
-	userID := r.URL.Query().Get("userId")
-	if userID == "" {
-		http.Error(w, "User ID is required", http.StatusBadRequest)
-		return
-	}
-
-	err := rt.db.UncommentMessage(messageID, userID)
+	// Use the userID obtained from the header directly, instead of reassigning it from the query parameters.
+	err = rt.db.UncommentMessage(messageID, userID)
 	if err != nil {
 		http.Error(w, "Failed to remove comment: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -152,7 +174,6 @@ func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps h
 
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Comment removed successfully"}); err != nil {
-		// Log the error. The response is already sent, so this is only for debugging.
 		log.Printf("Error encoding response: %v", err)
 	}
 }
@@ -163,6 +184,13 @@ type deleteMessageRequest struct {
 }
 
 func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+
+	userID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	messageID := ps.ByName("messageId")
 	if messageID == "" {
 		http.Error(w, "Message ID is required", http.StatusBadRequest)
@@ -175,7 +203,7 @@ func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps http
 		return
 	}
 
-	err := rt.db.DeleteMessage(messageID, req.SenderID)
+	err = rt.db.DeleteMessage(messageID, userID)
 	if err != nil {
 		http.Error(w, "Failed to delete message: "+err.Error(), http.StatusInternalServerError)
 		return

@@ -40,31 +40,23 @@ func (rt *_router) postSession(w http.ResponseWriter, r *http.Request, _ httprou
 		return
 	}
 
+	var userID string
 	if user != nil {
-		// User exists. Return the existing identifier.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(loginResponse{
-			Identifier: user.ID,
-		}); err != nil {
-			// You can log this error; the response is already sent, so this is just for debugging.
-			log.Printf("Error encoding login response: %v", err)
+		// User exists. Use existing identifier.
+		userID = user.ID
+	} else {
+		// If user does not exist, create a new user.
+		userID, err = rt.db.CreateUser(req.Username)
+		if err != nil {
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	// 4. If user does not exist, create a new user.
-	userID, err := rt.db.CreateUser(req.Username)
-	if err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
-		return
-	}
-
-	// 5. Return the newly created user identifier.
+	// 4. Return the user identifier.
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(loginResponse{Identifier: userID}); err != nil {
-		// You can log this error; the response is already sent, so this is just for debugging.
 		log.Printf("Error encoding login response: %v", err)
 	}
 }

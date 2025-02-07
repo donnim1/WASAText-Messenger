@@ -1,159 +1,14 @@
 openapi: 3.0.3
 info:
-  title: WASAText API Specification
-  description: |
-    This document defines the API for WASAText, an application that allows users to chat one-on-one or in groups,
-    share text messages and GIFs, and manage conversations.
+  title: WASAText API
   version: "1.0.0"
+  description: >
+    This document defines the API for the WASAText messaging application.
+    It includes endpoints for user login, updating user details,
+    managing conversations, sending messages, and handling group operations.
 servers:
-  - url: https://api.wasatext.example.com
-    description: Production server
-  - url: http://localhost:8080
+  - url: https://localhost:3000
     description: Local development server
-
-components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: "user-identifier"
-  schemas:
-    UserLogin:
-      type: object
-      required:
-        - name
-      properties:
-        name:
-          type: string
-          example: Maria
-          pattern: "^.*?$"
-          minLength: 3
-          maxLength: 16
-    UserIdentifier:
-      type: object
-      properties:
-        identifier:
-          type: string
-          example: "abcdef012345"
-    UserNameUpdate:
-      type: object
-      required:
-        - newName
-      properties:
-        newName:
-          type: string
-          example: "NewMaria"
-          minLength: 3
-          maxLength: 16
-    ConversationSummary:
-      type: object
-      properties:
-        conversationId:
-          type: string
-          example: "conv123"
-        name:
-          type: string
-          description: "Username or group name"
-          example: "JohnDoe"
-        photoUrl:
-          type: string
-          example: "https://example.com/photos/johndoe.jpg"
-        latestMessageTime:
-          type: string
-          format: date-time
-          example: "2025-01-31T15:04:05Z"
-        preview:
-          type: string
-          description: "Snippet of the latest text message or an icon indicator if it is a photo"
-          example: "Hey, how are you?"
-    Message:
-      type: object
-      properties:
-        messageId:
-          type: string
-          example: "msg001"
-        sender:
-          type: string
-          example: "JohnDoe"
-        timestamp:
-          type: string
-          format: date-time
-          example: "2025-01-31T15:04:05Z"
-        content:
-          type: string
-          example: "Hello!"
-        status:
-          type: string
-          description: "For sent messages: one checkmark for delivered, two for read."
-          example: "delivered"
-        reactions:
-          type: array
-          items:
-            type: object
-            properties:
-              reaction:
-                type: string
-                example: "👍"
-              by:
-                type: string
-                example: "JaneDoe"
-    MessageSend:
-      type: object
-      required:
-        - content
-      properties:
-        content:
-          type: string
-          example: "Hi there!"
-        replyTo:
-          type: string
-          description: "Optional messageId if replying to a message"
-          example: "msg001"
-    MessageForward:
-      type: object
-      required:
-        - targetConversationId
-      properties:
-        targetConversationId:
-          type: string
-          example: "conv456"
-    MessageComment:
-      type: object
-      required:
-        - reaction
-      properties:
-        reaction:
-          type: string
-          description: "Emoticon representing the comment"
-          example: "😂"
-    GroupMembersUpdate:
-      type: object
-      required:
-        - members
-      properties:
-        members:
-          type: array
-          description: "List of usernames to add"
-          items:
-            type: string
-          example: ["Alice", "Bob"]
-    GroupNameUpdate:
-      type: object
-      required:
-        - newGroupName
-      properties:
-        newGroupName:
-          type: string
-          example: "Weekend Buddies"
-    PhotoUpdate:
-      type: object
-      required:
-        - photoUrl
-      properties:
-        photoUrl:
-          type: string
-          description: "URL to the new photo"
-          example: "https://example.com/photos/newphoto.jpg"
 
 paths:
   /session:
@@ -161,408 +16,710 @@ paths:
       tags:
         - login
       summary: Logs in or registers a user
-      description: |
-        If the user does not exist, they are created and logged in.
-        If the user exists, they are logged in.
-      operationId: doLogin
+      description: >
+        If the user does not exist, they are created and an identifier is returned.
+        If the user exists, the user identifier is returned.
+      operationId: postSession
       requestBody:
-        description: User login details
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserLogin'
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 16
+                  pattern: "^[a-zA-Z0-9_-]+$"
+                  example: "alice"
       responses:
-        '201':
-          description: User login action successful
+        '200':
+          description: User exists; returns existing identifier.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserIdentifier'
+                $ref: '#/components/schemas/UserResponse'
+        '201':
+          description: New user created; returns newly generated identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /user/username:
     put:
       tags:
         - user
-      summary: Update the current user’s username
-      description: Update your username to a new one (if not already taken).
+      summary: Update the current user's username
+      description: Updates the username of the authenticated user.
       operationId: setMyUserName
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       requestBody:
-        description: New username details
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserNameUpdate'
+              type: object
+              required:
+                - newName
+              properties:
+                newName:
+                  type: string
+                  minLength: 3
+                  maxLength: 16
+                  pattern: "^[a-zA-Z0-9_-]+$"
+                  example: "newAlice"
       responses:
         '200':
-          description: Username updated successfully
+          description: Username updated successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserIdentifier'
-  /conversations:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /user/photo:
+    put:
+      tags:
+        - user
+      summary: Update the current user's profile photo
+      description: Updates the profile photo URL for the authenticated user.
+      operationId: setMyPhoto
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - photoUrl
+              properties:
+                photoUrl:
+                  type: string
+                  format: uri
+                  pattern: "^https://.+$"
+                  example: "https://example.com/photo.jpg"
+      responses:
+        '200':
+          description: Profile photo updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /conversation/myconversations:
     get:
       tags:
         - conversations
-      summary: Retrieve the list of conversations for the logged-in user
-      description: Returns a list of conversations, sorted in reverse chronological order.
+      summary: Retrieve all conversations for the authenticated user
+      description: Retrieves a list of conversations that the authenticated user is part of.
       operationId: getMyConversations
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       responses:
         '200':
-          description: A list of conversation summaries
+          description: List of conversations.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ConversationSummary'
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /conversations/{conversationId}:
     get:
       tags:
         - conversations
-      summary: Retrieve the details of a conversation
-      description: Returns all exchanged messages in the conversation in reverse chronological order.
+      summary: Retrieve a specific conversation
+      description: Retrieves conversation details and its messages.
       operationId: getConversation
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       parameters:
-        - name: conversationId
-          in: path
+        - in: path
+          name: conversationId
           required: true
           schema:
             type: string
-          description: Unique identifier for the conversation.
+            format: uuid
+          description: The conversation's unique identifier.
       responses:
         '200':
-          description: Conversation details with messages
+          description: Conversation details and messages.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   conversation:
-                    $ref: '#/components/schemas/ConversationSummary'
+                    $ref: '#/components/schemas/Conversation'
                   messages:
                     type: array
                     items:
                       $ref: '#/components/schemas/Message'
-  /conversations/{conversationId}/messages:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /message:
     post:
       tags:
         - messages
-      summary: Send a new message in a conversation
-      description: Send a message, optionally as a reply to an existing message.
+      summary: Send a message
+      description: >
+        Sends a new message. For private chats, if no conversation exists, one is auto-created.
       operationId: sendMessage
       security:
-        - BearerAuth: []
-      parameters:
-        - name: conversationId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the conversation.
+        - bearerAuth: []
       requestBody:
-        description: Message payload
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MessageSend'
+              type: object
+              required:
+                - content
+                - isGroup
+              properties:
+                receiverId:
+                  type: string
+                  format: uuid
+                  description: Required for private messages
+                  example: "receiver-uuid"
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 5000
+                  example: "Hello, world!"
+                isGroup:
+                  type: boolean
+                  example: false
+                groupId:
+                  type: string
+                  format: uuid
+                  description: Required when isGroup is true
+                  example: "group-uuid"
       responses:
         '201':
-          description: Message sent successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Message'
-  /messages/{messageId}/forward:
-    post:
-      tags:
-        - messages
-      summary: Forward an existing message to another conversation
-      description: Forward a message from one conversation to another.
-      operationId: forwardMessage
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: messageId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the message to forward.
-      requestBody:
-        description: Forwarding details, including target conversation
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MessageForward'
-      responses:
-        '200':
-          description: Message forwarded successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Message'
-  /messages/{messageId}/comments:
-    post:
-      tags:
-        - messages
-      summary: Comment (react to) a message
-      description: Add a reaction to a message.
-      operationId: commentMessage
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: messageId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the message to comment on.
-      requestBody:
-        description: Comment (reaction) details
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MessageComment'
-      responses:
-        '201':
-          description: Comment added successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Message'
-    delete:
-      tags:
-        - messages
-      summary: Remove a comment (reaction) from a message
-      description: Delete your reaction (comment) from a message.
-      operationId: uncommentMessage
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: messageId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the message.
-        - name: commentId
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Identifier of the comment to remove.
-      responses:
-        '204':
-          description: Comment removed successfully
-  /messages/{messageId}:
-    delete:
-      tags:
-        - messages
-      summary: Delete a sent message
-      description: Remove a message that you have sent.
-      operationId: deleteMessage
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: messageId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the message to delete.
-      responses:
-        '204':
-          description: Message deleted successfully
-  /groups/{groupId}/members:
-    post:
-      tags:
-        - groups
-      summary: Add members to a group
-      description: Add one or more users to an existing group.
-      operationId: addToGroup
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: groupId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the group.
-      requestBody:
-        description: List of members to add to the group
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GroupMembersUpdate'
-      responses:
-        '200':
-          description: Members added successfully
+          description: Message sent successfully.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  groupId:
+                  messageId:
                     type: string
-                    example: "group123"
-  /groups/{groupId}/members/me:
+                    format: uuid
+                    example: "message-uuid"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /message/{messageId}/forward:
+    post:
+      tags:
+        - messages
+      summary: Forward a message
+      description: Forwards an existing message to another conversation.
+      operationId: forwardMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the message to forward.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - targetConversationId
+              properties:
+                targetConversationId:
+                  type: string
+                  format: uuid
+                  example: "target-conversation-uuid"
+      responses:
+        '200':
+          description: Message forwarded successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messageId:
+                    type: string
+                    format: uuid
+                    example: "new-forwarded-message-uuid"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /message/{messageId}/comment:
+    post:
+      tags:
+        - messages
+      summary: Comment on a message
+      description: Adds a reaction (comment) to a message.
+      operationId: commentMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the message to comment on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reaction
+              properties:
+                reaction:
+                  type: string
+                  minLength: 1
+                  maxLength: 5
+                  example: "👍"
+      responses:
+        '201':
+          description: Comment added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /message/{messageId}/delete:
+    delete:
+      tags:
+        - messages
+      summary: Delete a message
+      description: Deletes a message if the authenticated user is the sender.
+      operationId: deleteMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the message to delete.
+      responses:
+        '200':
+          description: Message deleted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /groups/add:
+    post:
+      tags:
+        - groups
+      summary: Add a user to a group
+      description: Adds the authenticated user to the specified group.
+      operationId: addToGroup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - groupId
+              properties:
+                groupId:
+                  type: string
+                  format: uuid
+                  example: "group-uuid"
+      responses:
+        '200':
+          description: User added to group successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /groups/leave:
     delete:
       tags:
         - groups
       summary: Leave a group
-      description: The current user leaves the specified group.
+      description: Removes the authenticated user from the specified group.
       operationId: leaveGroup
       security:
-        - BearerAuth: []
-      parameters:
-        - name: groupId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the group.
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - groupId
+              properties:
+                groupId:
+                  type: string
+                  format: uuid
+                  example: "group-uuid"
       responses:
-        '204':
-          description: Left the group successfully
-  /groups/{groupId}/name:
+        '200':
+          description: Left group successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /groups/name:
     put:
       tags:
         - groups
-      summary: Update the group name
-      description: Change the name of a group.
+      summary: Update group name
+      description: Updates the name of a group.
       operationId: setGroupName
       security:
-        - BearerAuth: []
-      parameters:
-        - name: groupId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the group.
+        - bearerAuth: []
       requestBody:
-        description: New group name details
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GroupNameUpdate'
+              type: object
+              required:
+                - groupId
+                - newName
+              properties:
+                groupId:
+                  type: string
+                  format: uuid
+                  example: "group-uuid"
+                newName:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                  pattern: "^[\\w\\s-]+$"
+                  example: "New Group Name"
       responses:
         '200':
-          description: Group name updated successfully
+          description: Group name updated successfully.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  groupId:
-                    type: string
-                    example: "group123"
-                  groupName:
-                    type: string
-                    example: "New Group Name"
-  /user/photo:
-    put:
-      tags:
-        - user
-      summary: Update the current user’s profile photo
-      description: Change the URL of your profile photo.
-      operationId: setMyPhoto
-      security:
-        - BearerAuth: []
-      requestBody:
-        description: New photo URL
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PhotoUpdate'
-      responses:
-        '200':
-          description: Profile photo updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  photoUrl:
-                    type: string
-                    example: "https://example.com/photos/newphoto.jpg"
-  /groups/{groupId}/photo:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /groups/photo:
     put:
       tags:
         - groups
-      summary: Update the group photo
-      description: Change the URL of the group photo.
+      summary: Update group photo
+      description: Updates the photo URL of a group.
       operationId: setGroupPhoto
       security:
-        - BearerAuth: []
-      parameters:
-        - name: groupId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the group.
+        - bearerAuth: []
       requestBody:
-        description: New group photo URL
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PhotoUpdate'
+              type: object
+              required:
+                - groupId
+                - photoUrl
+              properties:
+                groupId:
+                  type: string
+                  format: uuid
+                  example: "group-uuid"
+                photoUrl:
+                  type: string
+                  format: uri
+                  pattern: "^https://.+$"
+                  example: "https://example.com/newgroupphoto.jpg"
       responses:
         '200':
-          description: Group photo updated successfully
+          description: Group photo updated successfully.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  photoUrl:
-                    type: string
-                    example: "https://example.com/photos/newgroupphoto.jpg"
-  /{anyPath}:
-    options:
-      summary: CORS Preflight
-      description: |
-        Responds to CORS preflight requests.
-        Allows all origins with a max age of 1 second.
-      parameters:
-        - in: path
-          name: anyPath
-          required: true
-          schema:
-            type: string
-          style: simple
-      responses:
-        '204':
-          description: No Content
-          headers:
-            Access-Control-Allow-Origin:
-              schema:
-                type: string
-                example: "*"
-            Access-Control-Allow-Methods:
-              schema:
-                type: string
-                example: "GET, POST, PUT, DELETE, OPTIONS"
-            Access-Control-Max-Age:
-              schema:
-                type: integer
-                example: 1
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          
+        '500':
+          $ref: '#/components/responses/InternalError'
 
-security:
-  - BearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        JWT token obtained from /session endpoint.
+        Token should be included in the Authorization header as "Bearer <token>".
+
+  schemas:
+    UserResponse:
+      type: object
+      required:
+        - identifier
+      properties:
+        identifier:
+          type: string
+          format: uuid
+          example: "uuid-of-alice"
+
+    SuccessResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: "Invalid request parameters"
+        details:
+          type: array
+          items:
+            type: string
+          example: ["Field 'name' must be between 3 and 16 characters"]
+
+    Conversation:
+      type: object
+      required:
+        - id
+        - is_group
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "conversation-uuid"
+        name:
+          type: string
+          example: "Group Name or null"
+          nullable: true
+        is_group:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-02-06T12:00:00Z"
+        photo_url:
+          type: string
+          format: uri
+          example: "https://example.com/group-photo.jpg"
+          nullable: true
+        last_message:
+          $ref: '#/components/schemas/Message'
+          nullable: true
+        unread_count:
+          type: integer
+          minimum: 0
+          example: 5
+
+    Message:
+      type: object
+      required:
+        - id
+        - conversation_id
+        - sender_id
+        - content
+        - sent_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "message-uuid"
+        conversation_id:
+          type: string
+          format: uuid
+          example: "conversation-uuid"
+        sender_id:
+          type: string
+          format: uuid
+          example: "sender-uuid"
+        content:
+          type: string
+          example: "Hello!"
+        reply_to:
+          type: string
+          format: uuid
+          nullable: true
+          example: "reply-message-uuid"
+        sent_at:
+          type: string
+          format: date-time
+          example: "2025-02-06T12:05:00Z"
+        edited_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-02-06T12:10:00Z"
+        reactions:
+          type: array
+          items:
+            type: object
+            required:
+              - user_id
+              - reaction
+            properties:
+              user_id:
+                type: string
+                format: uuid
+                example: "user-uuid"
+              reaction:
+                type: string
+                example: "👍"
+              created_at:
+                type: string
+                format: date-time
+                example: "2025-02-06T12:06:00Z"
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: Authentication token is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Number of seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

@@ -41,7 +41,7 @@ type appdbimpl struct {
 type User struct {
 	ID       string
 	Username string
-	PhotoURL sql.NullString // Now handles NULL values // Optional profile photo URL.
+	PhotoURL sql.NullString // Now handles NULL values; optional profile photo URL.
 }
 
 // Conversation represents a conversation record.
@@ -49,7 +49,7 @@ type Conversation struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	IsGroup   bool   `json:"is_group"`
-	CreatedAt string `json:"created_at"` // Added field to store the creation timestamp
+	CreatedAt string `json:"created_at"` // Timestamp of when the conversation was created
 }
 
 type Message struct {
@@ -57,7 +57,7 @@ type Message struct {
 	ConversationID string
 	SenderID       string
 	Content        string
-	ReplyTo        sql.NullString // use NullString if replies are optional
+	ReplyTo        sql.NullString // If replies are optional
 	SentAt         string         // using string for simplicity; you may use time.Time
 }
 
@@ -112,7 +112,7 @@ func New(db *sql.DB) (AppDatabase, error) {
 		return nil, fmt.Errorf("error creating users table: %w", err)
 	}
 
-	// Create conversations table if not exists
+	// Create conversations table if not exists.
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS conversations (
 		id TEXT PRIMARY KEY,
 		name TEXT, -- Name of group (NULL for private chats)
@@ -120,55 +120,54 @@ func New(db *sql.DB) (AppDatabase, error) {
 		group_photo TEXT, -- New column for the group photo URL
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
-
 	if err != nil {
 		return nil, fmt.Errorf("error creating conversations table: %w", err)
 	}
-	//create messages table if not exists
+
+	// Create messages table if not exists.
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS messages (
-	id TEXT PRIMARY KEY,
-	conversation_id TEXT NOT NULL,
-	sender_id TEXT NOT NULL,
-	content TEXT NOT NULL, -- Message text or media URL
-	reply_to TEXT NULL, -- If replying to another message
-	sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (conversation_id) REFERENCES conversations(id),
-	FOREIGN KEY (sender_id) REFERENCES users(id),
-	FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE CASCADE
-)`)
+		id TEXT PRIMARY KEY,
+		conversation_id TEXT NOT NULL,
+		sender_id TEXT NOT NULL,
+		content TEXT NOT NULL, -- Message text or media URL
+		reply_to TEXT NULL, -- If replying to another message
+		sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+		FOREIGN KEY (sender_id) REFERENCES users(id),
+		FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE CASCADE
+	)`)
 	if err != nil {
 		return nil, fmt.Errorf("error creating messages table: %w", err)
 	}
-	//create group_members table if not exists
+
+	// Create group_members table if not exists.
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS group_members (
-    group_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (group_id, user_id),
-    FOREIGN KEY (group_id) REFERENCES conversations(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	
-)`)
+		group_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (group_id, user_id),
+		FOREIGN KEY (group_id) REFERENCES conversations(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	)`)
 	if err != nil {
 		return nil, fmt.Errorf("error creating groups table: %w", err)
 	}
-	//create message reactions table if not exists
 
+	// Create message reactions table if not exists.
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS message_reactions (
-    message_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    reaction TEXT NOT NULL, -- Example: "😂" or "🔥"
-    reacted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (message_id, user_id),
-    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	
-)`)
+		message_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		reaction TEXT NOT NULL, -- Example: "😂" or "🔥"
+		reacted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (message_id, user_id),
+		FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	)`)
 	if err != nil {
 		return nil, fmt.Errorf("error creating message_reactions table: %w", err)
 	}
-	return &appdbimpl{db: db}, nil
 
+	return &appdbimpl{db: db}, nil
 }
 
 // CreateUser inserts a new user.
@@ -191,16 +190,13 @@ func (db *appdbimpl) CreateUser(username string) (string, error) {
 // GetUserByUsername retrieves a user by username.
 func (db *appdbimpl) GetUserByUsername(username string) (*User, error) {
 	row := db.db.QueryRow("SELECT id, username, photo_url FROM users WHERE username = ?", username)
-
 	var user User
 	err := row.Scan(&user.ID, &user.Username, &user.PhotoURL)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil // User does not exist.
 	} else if err != nil {
-		// Log the error for debugging.
 		return nil, fmt.Errorf("failed to retrieve user: %w", err)
 	}
-
 	return &user, nil
 }
 
@@ -209,30 +205,31 @@ func (db *appdbimpl) UpdateUserName(userID, newName string) error {
 	// Check if the new username is already taken.
 	var existingID string
 	err := db.db.QueryRow("SELECT id FROM users WHERE username = ?", newName).Scan(&existingID)
-	if errors.Is(err, sql.ErrNoRows) {
-		if err == nil {
-			// Username already exists.
-			return errors.New("username already exists")
-		}
-		// Some other error occurred.
+	if err == nil {
+		return errors.New("username already exists")
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("error checking for existing username: %w", err)
 	}
-
 	// Update the username.
 	_, err = db.db.Exec("UPDATE users SET username = ? WHERE id = ?", newName, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update username: %w", err)
 	}
-
 	return nil
 }
 
 // UpdateUserPhoto updates the profile photo URL for the specified user ID.
 func (db *appdbimpl) UpdateUserPhoto(userID, photoUrl string) error {
-	_, err := db.db.Exec("UPDATE users SET photo_url = ? WHERE id = ?", photoUrl, userID)
-
+	res, err := db.db.Exec("UPDATE users SET photo_url = ? WHERE id = ?", photoUrl, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update photo: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to update photo: %w", err)
+	}
+	if affected == 0 {
+		return errors.New("no user found to update photo")
 	}
 	return nil
 }
@@ -253,7 +250,6 @@ func GenerateNewID() (string, error) {
 
 // GetConversationsByUserID retrieves all conversations associated with a user.
 func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, error) {
-	// Updated query to include the created_at column
 	rows, err := db.db.Query(`
 		SELECT c.id, c.name, c.is_group, c.created_at
 		FROM conversations c
@@ -263,7 +259,6 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 		return nil, fmt.Errorf("failed to fetch conversations: %w", err)
 	}
 	defer rows.Close()
-
 	var conversations []Conversation
 	for rows.Next() {
 		var conversation Conversation
@@ -272,24 +267,18 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 		}
 		conversations = append(conversations, conversation)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
-
 	return conversations, nil
 }
 
-// / SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
+// SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
 func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, error) {
 	var conversationID string
-
-	// **1. Check if conversation exists**
 	if isGroup {
-		// If it's a group, use the group ID as the conversation ID
 		conversationID = groupID
 	} else {
-		// For private messages, check if a conversation already exists
 		query := `
 			SELECT id FROM conversations 
 			WHERE is_group = 0 
@@ -302,14 +291,11 @@ func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup b
 		`
 		err := db.db.QueryRow(query, senderID, receiverID).Scan(&conversationID)
 		if errors.Is(err, sql.ErrNoRows) {
-			// **2. If conversation does not exist, create a new one**
-			conversationID, _ = GenerateNewID() // Generate a new UUID
+			conversationID, _ = GenerateNewID()
 			_, err = db.db.Exec("INSERT INTO conversations (id, name, is_group) VALUES (?, NULL, 0)", conversationID)
 			if err != nil {
 				return "", fmt.Errorf("failed to create conversation: %w", err)
 			}
-
-			// Add both users to the `group_members` table
 			_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?), (?, ?)", conversationID, senderID, conversationID, receiverID)
 			if err != nil {
 				return "", fmt.Errorf("failed to add users to group_members: %w", err)
@@ -318,21 +304,17 @@ func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup b
 			return "", fmt.Errorf("error checking conversation: %w", err)
 		}
 	}
-
-	// **3. Insert message into messages table**
 	messageID, _ := GenerateNewID()
 	_, err := db.db.Exec("INSERT INTO messages (id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)",
 		messageID, conversationID, senderID, content)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert message: %w", err)
 	}
-
 	return messageID, nil
 }
 
 // ForwardMessage forwards a message to another conversation.
 func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
-	// Retrieve the original message.
 	var originalMessage Message
 	err := db.db.QueryRow("SELECT content, reply_to FROM messages WHERE id = ?", originalMessageID).
 		Scan(&originalMessage.Content, &originalMessage.ReplyTo)
@@ -341,26 +323,20 @@ func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, sen
 	} else if err != nil {
 		return "", fmt.Errorf("failed to retrieve original message: %w", err)
 	}
-
-	// Generate a new ID for the forwarded message.
 	newMessageID, err := GenerateNewID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate new message ID: %w", err)
 	}
-
-	// Insert the forwarded message into the messages table.
 	_, err = db.db.Exec("INSERT INTO messages (id, conversation_id, sender_id, content, reply_to) VALUES (?, ?, ?, ?, ?)",
 		newMessageID, targetConversationID, senderID, originalMessage.Content, originalMessage.ReplyTo)
 	if err != nil {
 		return "", fmt.Errorf("failed to forward message: %w", err)
 	}
-
 	return newMessageID, nil
 }
 
 // CommentMessage inserts a reaction (comment) for a message into the message_reactions table.
 func (db *appdbimpl) CommentMessage(messageID, userID, reaction string) error {
-	// Insert the reaction. Using INSERT OR REPLACE to allow updating an existing reaction.
 	_, err := db.db.Exec(
 		"INSERT OR REPLACE INTO message_reactions (message_id, user_id, reaction) VALUES (?, ?, ?)",
 		messageID, userID, reaction,
@@ -383,9 +359,8 @@ func (db *appdbimpl) UncommentMessage(messageID, userID string) error {
 	return nil
 }
 
-// DeleteMessage removes a message from the messages table. (In a real system, you might also mark it as deleted.)
+// DeleteMessage removes a message from the messages table.
 func (db *appdbimpl) DeleteMessage(messageID, senderID string) error {
-	// Optionally verify that the sender is the one deleting the message.
 	res, err := db.db.Exec("DELETE FROM messages WHERE id = ? AND sender_id = ?", messageID, senderID)
 	if err != nil {
 		return fmt.Errorf("failed to delete message: %w", err)
@@ -427,7 +402,6 @@ func (db *appdbimpl) LeaveGroup(groupID, userID string) error {
 
 // SetGroupName updates the name of a group (in the conversations table).
 func (db *appdbimpl) SetGroupName(groupID, newName string) error {
-	// Only update if the conversation is a group (is_group = 1)
 	_, err := db.db.Exec("UPDATE conversations SET name = ? WHERE id = ? AND is_group = 1", newName, groupID)
 	if err != nil {
 		return fmt.Errorf("failed to update group name: %w", err)
@@ -436,7 +410,6 @@ func (db *appdbimpl) SetGroupName(groupID, newName string) error {
 }
 
 // SetGroupPhoto updates the group photo for a group conversation.
-// Ensure that your conversations table has a column called group_photo.
 func (db *appdbimpl) SetGroupPhoto(groupID, photoUrl string) error {
 	_, err := db.db.Exec("UPDATE conversations SET group_photo = ? WHERE id = ? AND is_group = 1", photoUrl, groupID)
 	if err != nil {
