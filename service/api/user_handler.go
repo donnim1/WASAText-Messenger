@@ -109,3 +109,52 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 	}
 
 }
+
+// listUsersResponse defines the JSON response for listing users.
+type listUsersResponse struct {
+    Users []UserSummary `json:"users"`
+}
+
+// UserSummary represents a simplified user object.
+type UserSummary struct {
+    ID       string `json:"id"`
+    Username string `json:"username"`
+    PhotoURL string `json:"photoUrl"`
+}
+
+// listUsers handles GET requests to /users and returns all users.
+func (rt *_router) listUsers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+    // (Optional) Validate Authorization header if you want only authenticated users to view the list.
+    _, err := rt.getAuthenticatedUserID(r)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Call the database function to list users.
+    users, err := rt.db.ListUsers()
+    if err != nil {
+        http.Error(w, "Failed to list users: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Build a response slice with just the summary info.
+    var summaries []UserSummary
+    for _, u := range users {
+        photo := ""
+        if u.PhotoURL.Valid {
+            photo = u.PhotoURL.String
+        }
+        summaries = append(summaries, UserSummary{
+            ID:       u.ID,
+            Username: u.Username,
+            PhotoURL: photo,
+        })
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    if err := json.NewEncoder(w).Encode(listUsersResponse{Users: summaries}); err != nil {
+        log.Printf("Error encoding response: %v", err)
+    }
+}

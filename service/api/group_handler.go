@@ -2,11 +2,93 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
 )
+
+// groupListResponse defines the JSON response for listing groups.
+type groupListResponse struct {
+	Groups []Conversation `json:"groups"`
+}
+
+// listGroups handles GET /groups and returns all groups the authenticated user is a member of.
+func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Validate the Authorization header.
+	userID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Retrieve groups from the database.
+	groups, err := rt.db.GetGroupsByUserID(userID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to retrieve groups: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert []database.Conversation to []Conversation.
+	var convs []Conversation
+	for _, group := range groups {
+		convs = append(convs, Conversation(group))
+	}
+
+	// Return the groups as JSON.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(groupListResponse{Groups: convs}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// createGroupRequest defines the expected JSON payload for creating a group.
+type createGroupRequest struct {
+	GroupName  string `json:"groupName"`  // Group name is required.
+	GroupPhoto string `json:"groupPhoto"` // Optional group photo URL.
+}
+
+// createGroupResponse defines the response for group creation.
+type createGroupResponse struct {
+	GroupID string `json:"groupId"`
+}
+
+// createGroup handles POST /groups/create to create a new group.
+func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Validate the Authorization header and extract the authenticated user ID.
+	creatorID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse the request body.
+	var req createGroupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+	if req.GroupName == "" {
+		http.Error(w, "Group name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Call the database function to create a new group.
+	groupID, err := rt.db.CreateGroup(creatorID, req.GroupName, req.GroupPhoto)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create group: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Return the newly created group ID.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(createGroupResponse{GroupID: groupID}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
 
 // addToGroupRequest defines the expected JSON payload for adding a user to a group.
 // We no longer need to pass UserID in the body because we extract it from the Authorization header.

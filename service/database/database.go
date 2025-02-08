@@ -15,6 +15,9 @@ type AppDatabase interface {
 	UpdateUserName(userID, newName string) error
 	UpdateUserPhoto(userID, photoUrl string) error
 
+	// ListUsers retrieves all users.
+	ListUsers() ([]User, error)
+
 	GetConversationsByUserID(userID string) ([]Conversation, error)
 	GetConversation(conversationID string) (*Conversation, []Message, error)
 
@@ -23,6 +26,10 @@ type AppDatabase interface {
 	CommentMessage(messageID, userID, reaction string) error
 	UncommentMessage(messageID, userID string) error
 	DeleteMessage(messageID, senderID string) error
+
+	// CreateGroup creates a new group conversation and adds the creator as a member.
+	CreateGroup(creatorID, groupName, groupPhoto string) (string, error)
+	GetGroupsByUserID(userID string) ([]Conversation, error)
 
 	AddToGroup(groupID, userID string) error
 	LeaveGroup(groupID, userID string) error
@@ -60,6 +67,90 @@ type Message struct {
 	ReplyTo        sql.NullString // If replies are optional
 	SentAt         string         // using string for simplicity; you may use time.Time
 }
+
+
+// GetGroupsByUserID retrieves all group conversations associated with a user.
+func (db *appdbimpl) GetGroupsByUserID(userID string) ([]Conversation, error) {
+    query := `
+      SELECT c.id, c.name, c.is_group, c.created_at, c.group_photo
+      FROM conversations c
+      JOIN group_members gm ON c.id = gm.group_id
+      WHERE gm.user_id = ? AND c.is_group = 1
+    `
+    rows, err := db.db.Query(query, userID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch groups: %w", err)
+    }
+    defer rows.Close()
+
+    var groups []Conversation
+    for rows.Next() {
+        var conv Conversation
+        // If you want to include group_photo, consider adding it to the Conversation struct.
+        if err := rows.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt, new(interface{})); err != nil {
+            return nil, fmt.Errorf("failed to scan group: %w", err)
+        }
+        groups = append(groups, conv)
+    }
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("rows iteration error: %w", err)
+    }
+    return groups, nil
+}
+
+
+// CreateGroup creates a new group conversation and adds the creator as a member.
+func (db *appdbimpl) CreateGroup(creatorID, groupName, groupPhoto string) (string, error) {
+    // Generate a new UUID for the group.
+    groupID, err := GenerateNewID()
+    if err != nil {
+        return "", fmt.Errorf("failed to generate group id: %w", err)
+    }
+
+    // Insert a new group conversation into the conversations table.
+    // Set is_group = 1 to mark it as a group, and store the group name and photo.
+    _, err = db.db.Exec(
+        "INSERT INTO conversations (id, name, is_group, group_photo) VALUES (?, ?, 1, ?)",
+        groupID, groupName, groupPhoto,
+    )
+    if err != nil {
+        return "", fmt.Errorf("failed to create group conversation: %w", err)
+    }
+
+    // Add the creator to the group_members table.
+    _, err = db.db.Exec(
+        "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
+        groupID, creatorID,
+    )
+    if err != nil {
+        return "", fmt.Errorf("failed to add creator to group_members: %w", err)
+    }
+
+    return groupID, nil
+}
+
+
+func (db *appdbimpl) ListUsers() ([]User, error) {
+    rows, err := db.db.Query("SELECT id, username, photo_url FROM users")
+    if err != nil {
+        return nil, fmt.Errorf("failed to list users: %w", err)
+    }
+    defer rows.Close()
+
+    var users []User
+    for rows.Next() {
+        var user User
+        if err := rows.Scan(&user.ID, &user.Username, &user.PhotoURL); err != nil {
+            return nil, fmt.Errorf("failed to scan user: %w", err)
+        }
+        users = append(users, user)
+    }
+    if err = rows.Err(); err != nil {
+        return nil, fmt.Errorf("rows iteration error: %w", err)
+    }
+    return users, nil
+}
+
 
 // GetConversation retrieves a conversation and all its messages.
 func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Message, error) {

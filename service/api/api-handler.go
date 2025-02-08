@@ -15,6 +15,8 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.PUT("/user/username", rt.setMyUserName)
 	rt.router.PUT("/user/photo", rt.setMyPhoto)
 
+	rt.router.GET("/users", rt.listUsers)
+
 	rt.router.GET("/conversation/myconversations", rt.getMyConversations)
 	rt.router.GET("/conversations/{conversationId}", rt.getConversation)
 
@@ -25,6 +27,13 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.DELETE("/message/{messageId}/delete", rt.deleteMessage)
 
 	// Group endpoints
+
+	// For example, in your API handler registration:
+	rt.router.POST("/groups/create", rt.createGroup)
+	// Register the GET /groups endpoint.
+	rt.router.GET("/groups", rt.listGroups)
+
+
 	rt.router.POST("/groups/add", rt.addToGroup)
 	rt.router.DELETE("/groups/leave", rt.leaveGroup)
 	rt.router.PUT("/groups/name", rt.setGroupName)
