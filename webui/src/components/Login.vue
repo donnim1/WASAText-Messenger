@@ -39,6 +39,7 @@ export default {
         const response = await apiClient.post('/session', { name: this.username })
         const userID = response.data.identifier
         localStorage.setItem('userID', userID)
+        localStorage.setItem('username', this.username);
         this.$emit('loggedIn', userID)
       } catch (error) {
         this.errorMessage =

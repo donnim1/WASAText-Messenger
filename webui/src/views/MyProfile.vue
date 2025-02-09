@@ -1,25 +1,39 @@
 <template>
-	<div class="profile-container">
+	<div class="profile-card">
 	  <!-- Sidebar: Displays current user's photo and username -->
 	  <div class="profile-sidebar">
 		<img :src="currentPhotoUrl || defaultPhoto" alt="Profile Photo" class="profile-image" />
-		<h2>{{ currentUsername }}</h2>
+		<h2 class="profile-username">{{ currentUsername }}</h2>
 	  </div>
-	  <!-- Main Section: Forms to update username and photo (no preview here) -->
+	  <!-- Main Section: Forms to update username and photo -->
 	  <div class="profile-main">
 		<h1>Update Profile</h1>
-		<form @submit.prevent="updateUsernameHandler" class="username-form">
-		  <label for="username">New Username:</label>
-		  <input id="username" v-model="newUsername" placeholder="Enter new username" required minlength="3" maxlength="16" />
+		<form @submit.prevent="updateUsernameHandler" class="update-form">
+		  <label for="username">Update Username</label>
+		  <input
+			id="username"
+			v-model="newUsername"
+			type="text"
+			placeholder="Enter new username"
+			required
+			minlength="3"
+			maxlength="16"
+		  />
 		  <button type="submit">Update Username</button>
 		</form>
-		<form @submit.prevent="updatePhotoHandler" class="photo-form">
-		  <label for="photo">New Profile Photo URL:</label>
-		  <input id="photo" v-model="newPhotoUrl" placeholder="Enter photo URL" required />
+		<form @submit.prevent="updatePhotoHandler" class="update-form">
+		  <label for="photo">Update Profile Photo URL</label>
+		  <input
+			id="photo"
+			v-model="newPhotoUrl"
+			type="url"
+			placeholder="Enter new photo URL"
+			required
+		  />
 		  <button type="submit">Update Photo</button>
 		</form>
-		<div v-if="message" class="message">{{ message }}</div>
-		<div v-if="error" class="error">{{ error }}</div>
+		<div v-if="message" class="success-message">{{ message }}</div>
+		<div v-if="error" class="error-message">{{ error }}</div>
 	  </div>
 	</div>
   </template>
@@ -31,12 +45,12 @@
   export default {
 	name: 'MyProfileView',
 	setup() {
-	  // Load current profile info from localStorage
-	  const currentUsername = ref(localStorage.getItem('username') || 'Anonymous');
+	  // Read current profile info from localStorage; if not present, use defaults.
+	  const currentUsername = ref(localStorage.getItem('username') || '');
 	  const currentPhotoUrl = ref(localStorage.getItem('photoUrl') || '');
-	  const defaultPhoto = ref("https://via.placeholder.com/150?text=No+Photo");
+	  const defaultPhoto = ref("https://static.vecteezy.com/system/resources/thumbnails/009/734/564/small/default-avatar-profile-icon-of-social-media-user-vector.jpg");
   
-	  // Variables for the update forms
+	  // Fields for updating profile data.
 	  const newUsername = ref('');
 	  const newPhotoUrl = ref('');
 	  const message = ref('');
@@ -48,7 +62,7 @@
 		try {
 		  const response = await updateUsername(newUsername.value);
 		  message.value = response.data.message;
-		  // Update sidebar and localStorage
+		  // Update the current username and persist it.
 		  currentUsername.value = newUsername.value;
 		  localStorage.setItem('username', newUsername.value);
 		} catch (err) {
@@ -63,7 +77,7 @@
 		try {
 		  const response = await updatePhoto(newPhotoUrl.value);
 		  message.value = response.data.message;
-		  // Update sidebar and localStorage
+		  // Update the current photo and persist it.
 		  currentPhotoUrl.value = newPhotoUrl.value;
 		  localStorage.setItem('photoUrl', newPhotoUrl.value);
 		} catch (err) {
@@ -73,7 +87,7 @@
 	  }
   
 	  onMounted(() => {
-		// Reload profile data when component mounts
+		// Reload profile details from localStorage on component mount.
 		currentUsername.value = localStorage.getItem('username') || 'Anonymous';
 		currentPhotoUrl.value = localStorage.getItem('photoUrl') || '';
 	  });
@@ -94,19 +108,20 @@
   </script>
   
   <style scoped>
-  .profile-container {
+  .profile-card {
+	max-width: 500px;
+	margin: 40px auto;
+	padding: 20px;
+	border: 1px solid #ddd;
+	border-radius: 8px;
+	background: #fff;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 	display: flex;
 	gap: 20px;
-	padding: 20px;
-	background: #e8f5e9; /* Light green background */
-	border-radius: 8px;
-	max-width: 900px;
-	margin: 20px auto;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
   
   .profile-sidebar {
-	flex: 0 0 250px;
+	flex: 0 0 200px;
 	text-align: center;
 	padding: 20px;
 	background: #66bb6a; /* Medium green */
@@ -123,57 +138,63 @@
 	margin-bottom: 10px;
   }
   
+  .profile-username {
+	font-size: 1.8rem;
+	margin-top: 10px;
+  }
+  
   .profile-main {
 	flex: 1;
 	padding: 20px;
-	background: white;
+	background: #f9fbe7; /* Light green background */
 	border-radius: 8px;
   }
   
-  .username-form,
-  .photo-form {
+  .update-form {
 	margin-bottom: 20px;
+	display: flex;
+	flex-direction: column;
   }
   
-  label {
-	display: block;
+  .update-form label {
 	font-weight: bold;
 	margin-bottom: 5px;
   }
   
-  input {
-	width: 100%;
-	padding: 10px;
-	margin-bottom: 10px;
+  .update-form input {
+	padding: 8px;
 	border: 1px solid #ccc;
 	border-radius: 4px;
 	font-size: 1rem;
+	margin-bottom: 10px;
   }
   
-  button {
-	background-color: #43a047; /* Green */
+  .update-form button {
+	padding: 10px;
+	background-color: #43a047;
 	color: white;
-	padding: 10px 15px;
 	border: none;
 	border-radius: 4px;
 	cursor: pointer;
 	font-size: 1rem;
   }
   
-  button:hover {
+  .update-form button:hover {
 	background-color: #388e3c;
   }
   
-  .message {
+  .success-message {
 	color: green;
-	margin-top: 10px;
 	font-weight: bold;
+	text-align: center;
+	margin-top: 10px;
   }
   
-  .error {
+  .error-message {
 	color: red;
-	margin-top: 10px;
 	font-weight: bold;
+	text-align: center;
+	margin-top: 10px;
   }
   </style>
   

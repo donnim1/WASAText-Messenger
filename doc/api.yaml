@@ -9,6 +9,17 @@ info:
 servers:
   - url: https://localhost:3000
     description: Local development server
+tags:
+  - name: login
+    description: Endpoints for user authentication
+  - name: user
+    description: Endpoints for user profile management
+  - name: conversations
+    description: Endpoints for managing conversations
+  - name: messages
+    description: Endpoints for messaging operations
+  - name: groups
+    description: Endpoints for group management
 
 paths:
   /session:
@@ -26,24 +37,26 @@ paths:
           application/json:
             schema:
               type: object
+              description: Payload for logging in
               required:
                 - name
               properties:
                 name:
                   type: string
+                  description: The username. Must be 3–16 characters with letters, numbers, underscores, or hyphens.
                   minLength: 3
                   maxLength: 16
                   pattern: "^[a-zA-Z0-9_-]+$"
                   example: "alice"
       responses:
         '200':
-          description: User exists; returns existing identifier.
+          description: User exists; returns existing identifier
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserResponse'
         '201':
-          description: New user created; returns newly generated identifier.
+          description: New user created; returns newly generated identifier
           content:
             application/json:
               schema:
@@ -70,18 +83,20 @@ paths:
           application/json:
             schema:
               type: object
+              description: Payload for updating username
               required:
                 - newName
               properties:
                 newName:
                   type: string
+                  description: New username (3–16 characters)
                   minLength: 3
                   maxLength: 16
                   pattern: "^[a-zA-Z0-9_-]+$"
                   example: "newAlice"
       responses:
         '200':
-          description: Username updated successfully.
+          description: Username updated successfully
           content:
             application/json:
               schema:
@@ -108,17 +123,21 @@ paths:
           application/json:
             schema:
               type: object
+              description: Payload for updating profile photo
               required:
                 - photoUrl
               properties:
                 photoUrl:
                   type: string
+                  description: The URL of the new profile photo. Must be a valid HTTPS URL.
                   format: uri
                   pattern: "^https://.+$"
+                  minLength: 10
+                  maxLength: 2048
                   example: "https://example.com/photo.jpg"
       responses:
         '200':
-          description: Profile photo updated successfully.
+          description: Profile photo updated successfully
           content:
             application/json:
               schema:
@@ -135,20 +154,26 @@ paths:
       tags:
         - conversations
       summary: Retrieve all conversations for the authenticated user
-      description: Retrieves a list of conversations that the authenticated user is part of.
+      description: Retrieves a list of conversation summaries for the authenticated user.
       operationId: getMyConversations
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: List of conversations.
+          description: List of conversations
           content:
             application/json:
               schema:
                 type: object
+                description: A list of conversation summaries.
+                required:
+                  - conversations
                 properties:
                   conversations:
                     type: array
+                    description: An array of conversation objects.
+                    minItems: 0
+                    maxItems: 1000
                     items:
                       $ref: '#/components/schemas/Conversation'
         '401':
@@ -161,7 +186,7 @@ paths:
       tags:
         - conversations
       summary: Retrieve a specific conversation
-      description: Retrieves conversation details and its messages.
+      description: Retrieves the details and messages for a given conversation.
       operationId: getConversation
       security:
         - bearerAuth: []
@@ -170,21 +195,27 @@ paths:
           name: conversationId
           required: true
           schema:
-            type: string
-            format: uuid
-          description: The conversation's unique identifier.
+            $ref: '#/components/schemas/Uuid'
+          description: The unique identifier of the conversation.
       responses:
         '200':
-          description: Conversation details and messages.
+          description: Conversation details and messages
           content:
             application/json:
               schema:
                 type: object
+                description: An object containing the conversation and its messages.
+                required:
+                  - conversation
+                  - messages
                 properties:
                   conversation:
                     $ref: '#/components/schemas/Conversation'
                   messages:
                     type: array
+                    description: A list of messages in the conversation.
+                    minItems: 0
+                    maxItems: 1000
                     items:
                       $ref: '#/components/schemas/Message'
         '400':
@@ -196,7 +227,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /message:
+  /messages:
     post:
       tags:
         - messages
@@ -212,40 +243,57 @@ paths:
           application/json:
             schema:
               type: object
+              description: Payload for sending a message.
               required:
                 - content
                 - isGroup
               properties:
                 receiverId:
                   type: string
+                  description: Receiver user ID (for private messages).
                   format: uuid
-                  description: Required for private messages
-                  example: "receiver-uuid"
+                  pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                  minLength: 36
+                  maxLength: 36
+                  example: "123e4567-e89b-12d3-a456-426614174000"
                 content:
                   type: string
+                  description: The message content.
                   minLength: 1
                   maxLength: 5000
+                  pattern: ".*"
                   example: "Hello, world!"
                 isGroup:
                   type: boolean
+                  description: Indicates whether this is a group message.
                   example: false
                 groupId:
                   type: string
+                  description: Group ID (required when isGroup is true).
                   format: uuid
-                  description: Required when isGroup is true
-                  example: "group-uuid"
+                  pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                  minLength: 36
+                  maxLength: 36
+                  example: "123e4567-e89b-12d3-a456-426614174001"
       responses:
         '201':
-          description: Message sent successfully.
+          description: Message sent successfully
           content:
             application/json:
               schema:
                 type: object
+                description: Contains the new message ID.
+                required:
+                  - messageId
                 properties:
                   messageId:
                     type: string
+                    description: Unique identifier of the sent message.
                     format: uuid
-                    example: "message-uuid"
+                    pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    minLength: 36
+                    maxLength: 36
+                    example: "123e4567-e89b-12d3-a456-426614174002"
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -253,7 +301,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /message/{messageId}/forward:
+  /messages/{messageId}/forward:
     post:
       tags:
         - messages
@@ -267,8 +315,7 @@ paths:
           name: messageId
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/Uuid'
           description: The ID of the message to forward.
       requestBody:
         required: true
@@ -276,25 +323,37 @@ paths:
           application/json:
             schema:
               type: object
+              description: Payload for forwarding a message.
               required:
                 - targetConversationId
               properties:
                 targetConversationId:
                   type: string
+                  description: The target conversation ID.
                   format: uuid
-                  example: "target-conversation-uuid"
+                  pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                  minLength: 36
+                  maxLength: 36
+                  example: "123e4567-e89b-12d3-a456-426614174003"
       responses:
         '200':
-          description: Message forwarded successfully.
+          description: Message forwarded successfully
           content:
             application/json:
               schema:
                 type: object
+                description: Contains the forwarded message ID.
+                required:
+                  - messageId
                 properties:
                   messageId:
                     type: string
+                    description: Unique identifier of the forwarded message.
                     format: uuid
-                    example: "new-forwarded-message-uuid"
+                    pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    minLength: 36
+                    maxLength: 36
+                    example: "123e4567-e89b-12d3-a456-426614174004"
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -302,11 +361,11 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /message/{messageId}/comment:
+  /messages/{messageId}/comments:
     post:
       tags:
         - messages
-      summary: Comment on a message
+      summary: Add a comment to a message
       description: Adds a reaction (comment) to a message.
       operationId: commentMessage
       security:
@@ -316,8 +375,7 @@ paths:
           name: messageId
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/Uuid'
           description: The ID of the message to comment on.
       requestBody:
         required: true
@@ -325,17 +383,20 @@ paths:
           application/json:
             schema:
               type: object
+              description: Payload for adding a comment.
               required:
                 - reaction
               properties:
                 reaction:
                   type: string
+                  description: Reaction text (e.g., an emoji).
                   minLength: 1
                   maxLength: 5
+                  pattern: "^.{1,5}$"
                   example: "👍"
       responses:
         '201':
-          description: Comment added successfully.
+          description: Comment added successfully
           content:
             application/json:
               schema:
@@ -347,7 +408,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /message/{messageId}/delete:
+  /messages/{messageId}/delete:
     delete:
       tags:
         - messages
@@ -361,12 +422,11 @@ paths:
           name: messageId
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/Uuid'
           description: The ID of the message to delete.
       responses:
         '200':
-          description: Message deleted successfully.
+          description: Message deleted successfully
           content:
             application/json:
               schema:
@@ -380,13 +440,13 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /groups/add:
+  /groups/create:
     post:
       tags:
         - groups
-      summary: Add a user to a group
-      description: Adds the authenticated user to the specified group.
-      operationId: addToGroup
+      summary: Create a new group
+      description: Creates a new group conversation and automatically adds the creator as a member.
+      operationId: createGroup
       security:
         - bearerAuth: []
       requestBody:
@@ -395,16 +455,88 @@ paths:
           application/json:
             schema:
               type: object
+              description: Payload for creating a group.
               required:
-                - groupId
+                - groupName
               properties:
-                groupId:
+                groupName:
                   type: string
+                  description: The name of the new group.
+                  minLength: 3
+                  maxLength: 50
+                  pattern: "^[\\w\\s-]+$"
+                  example: "Friends Group"
+                groupPhoto:
+                  type: string
+                  description: Optional URL for the group photo.
+                  format: uri
+                  pattern: "^https://.+$"
+                  minLength: 10
+                  maxLength: 2048
+                  example: "https://example.com/group-photo.jpg"
+      responses:
+        '201':
+          description: Group created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Contains the newly created group ID.
+                required:
+                  - groupId
+                properties:
+                  groupId:
+                    type: string
+                    description: Unique identifier of the created group.
+                    format: uuid
+                    pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    minLength: 36
+                    maxLength: 36
+                    example: "123e4567-e89b-12d3-a456-426614174005"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /groups/{groupId}/members:
+    post:
+      tags:
+        - groups
+      summary: Add a user to a group
+      description: Adds a user to the specified group.
+      operationId: addToGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: groupId
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+          description: The group's unique identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payload to add a user to a group.
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  description: The ID of the user to add.
                   format: uuid
-                  example: "group-uuid"
+                  pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                  minLength: 36
+                  maxLength: 36
+                  example: "123e4567-e89b-12d3-a456-426614174006"
       responses:
         '200':
-          description: User added to group successfully.
+          description: User added to group successfully
           content:
             application/json:
               schema:
@@ -418,7 +550,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /groups/leave:
+  /groups/{groupId}/leave:
     delete:
       tags:
         - groups
@@ -427,22 +559,16 @@ paths:
       operationId: leaveGroup
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - groupId
-              properties:
-                groupId:
-                  type: string
-                  format: uuid
-                  example: "group-uuid"
+      parameters:
+        - in: path
+          name: groupId
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+          description: The group's unique identifier.
       responses:
         '200':
-          description: Left group successfully.
+          description: Left group successfully
           content:
             application/json:
               schema:
@@ -456,7 +582,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /groups/name:
+  /groups/{groupId}/name:
     put:
       tags:
         - groups
@@ -465,29 +591,33 @@ paths:
       operationId: setGroupName
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: groupId
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+          description: The group's unique identifier.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              description: Payload for updating group name.
               required:
-                - groupId
                 - newName
               properties:
-                groupId:
-                  type: string
-                  format: uuid
-                  example: "group-uuid"
                 newName:
                   type: string
+                  description: The new group name.
                   minLength: 3
                   maxLength: 50
                   pattern: "^[\\w\\s-]+$"
                   example: "New Group Name"
       responses:
         '200':
-          description: Group name updated successfully.
+          description: Group name updated successfully
           content:
             application/json:
               schema:
@@ -501,7 +631,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /groups/photo:
+  /groups/{groupId}/photo:
     put:
       tags:
         - groups
@@ -510,28 +640,34 @@ paths:
       operationId: setGroupPhoto
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: groupId
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+          description: The group's unique identifier.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              description: Payload for updating group photo.
               required:
-                - groupId
                 - photoUrl
               properties:
-                groupId:
-                  type: string
-                  format: uuid
-                  example: "group-uuid"
                 photoUrl:
                   type: string
+                  description: The new group photo URL.
                   format: uri
                   pattern: "^https://.+$"
+                  minLength: 10
+                  maxLength: 2048
                   example: "https://example.com/newgroupphoto.jpg"
       responses:
         '200':
-          description: Group photo updated successfully.
+          description: Group photo updated successfully
           content:
             application/json:
               schema:
@@ -542,7 +678,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-          
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -553,172 +688,212 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: >
-        JWT token obtained from /session endpoint.
-        Token should be included in the Authorization header as "Bearer <token>".
-
+        JWT token obtained from the /session endpoint.
+        Include the token in the Authorization header as "Bearer <token>".
   schemas:
+    Uuid:
+      type: string
+      format: uuid
+      pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      minLength: 36
+      maxLength: 36
+      description: A universally unique identifier.
     UserResponse:
       type: object
+      description: Response containing a user's identifier.
       required:
         - identifier
       properties:
         identifier:
-          type: string
-          format: uuid
-          example: "uuid-of-alice"
-
+          $ref: '#/components/schemas/Uuid'
     SuccessResponse:
       type: object
+      description: A response indicating a successful operation.
       required:
         - message
       properties:
         message:
           type: string
+          description: A success message.
+          minLength: 1
+          maxLength: 200
+          pattern: ".*"
           example: "Operation completed successfully"
-
     ErrorResponse:
       type: object
+      description: Response containing error details.
       required:
         - error
+        - details
       properties:
         error:
           type: string
+          description: A brief error message.
+          minLength: 1
+          maxLength: 200
+          pattern: ".*"
           example: "Invalid request parameters"
         details:
           type: array
+          description: Additional error details.
+          minItems: 0
+          maxItems: 100
           items:
             type: string
+            description: An error detail.
+            minLength: 1
+            maxLength: 500
+            pattern: ".*"
           example: ["Field 'name' must be between 3 and 16 characters"]
-
     Conversation:
       type: object
+      description: A conversation summary.
       required:
         - id
-        - is_group
-        - created_at
+        - isGroup
+        - createdAt
       properties:
         id:
-          type: string
-          format: uuid
-          example: "conversation-uuid"
+          $ref: '#/components/schemas/Uuid'
         name:
           type: string
-          example: "Group Name or null"
-          nullable: true
-        is_group:
+          description: The name of the conversation or group.
+          minLength: 1
+          maxLength: 100
+          pattern: ".*"
+          example: "Group Chat"
+        isGroup:
           type: boolean
+          description: Indicates whether the conversation is a group chat.
           example: true
-        created_at:
+        createdAt:
           type: string
           format: date-time
+          description: Timestamp when the conversation was created.
+          minLength: 20
+          maxLength: 30
           example: "2025-02-06T12:00:00Z"
-        photo_url:
+        photoUrl:
           type: string
           format: uri
+          description: URL of the group photo (for group chats).
+          pattern: "^https://.+$"
+          minLength: 10
+          maxLength: 2048
           example: "https://example.com/group-photo.jpg"
-          nullable: true
-        last_message:
+        lastMessage:
           $ref: '#/components/schemas/Message'
-          nullable: true
-        unread_count:
+        unreadCount:
           type: integer
+          description: Number of unread messages.
           minimum: 0
           example: 5
-
     Message:
       type: object
+      description: A message in a conversation.
       required:
         - id
-        - conversation_id
-        - sender_id
+        - conversationId
+        - senderId
         - content
-        - sent_at
+        - sentAt
+        - reactions
       properties:
         id:
-          type: string
-          format: uuid
-          example: "message-uuid"
-        conversation_id:
-          type: string
-          format: uuid
-          example: "conversation-uuid"
-        sender_id:
-          type: string
-          format: uuid
-          example: "sender-uuid"
+          $ref: '#/components/schemas/Uuid'
+        conversationId:
+          $ref: '#/components/schemas/Uuid'
+        senderId:
+          $ref: '#/components/schemas/Uuid'
         content:
           type: string
+          description: The content of the message.
+          minLength: 1
+          maxLength: 5000
+          pattern: ".*"
           example: "Hello!"
-        reply_to:
+        replyTo:
           type: string
+          description: Identifier of the message being replied to.
           format: uuid
-          nullable: true
-          example: "reply-message-uuid"
-        sent_at:
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          minLength: 36
+          maxLength: 36
+          example: "123e4567-e89b-12d3-a456-426614174021"
+        sentAt:
           type: string
           format: date-time
+          description: Timestamp when the message was sent.
+          minLength: 20
+          maxLength: 30
           example: "2025-02-06T12:05:00Z"
-        edited_at:
+        editedAt:
           type: string
           format: date-time
-          nullable: true
+          description: Timestamp when the message was edited.
+          minLength: 20
+          maxLength: 30
           example: "2025-02-06T12:10:00Z"
         reactions:
           type: array
+          description: List of reactions for the message.
+          minItems: 0
+          maxItems: 100
           items:
             type: object
+            description: A reaction on the message.
             required:
-              - user_id
+              - userId
               - reaction
             properties:
-              user_id:
-                type: string
-                format: uuid
-                example: "user-uuid"
+              userId:
+                $ref: '#/components/schemas/Uuid'
               reaction:
                 type: string
+                description: The reaction (emoji or text).
+                minLength: 1
+                maxLength: 5
+                pattern: "^.{1,5}$"
                 example: "👍"
-              created_at:
+              createdAt:
                 type: string
                 format: date-time
+                description: Timestamp when the reaction was created.
+                minLength: 20
+                maxLength: 30
                 example: "2025-02-06T12:06:00Z"
-
   responses:
     BadRequest:
-      description: Invalid request parameters
+      description: Invalid request parameters.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-
     Unauthorized:
-      description: Authentication token is missing or invalid
+      description: Authentication token is missing or invalid.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-
     NotFound:
-      description: Requested resource was not found
+      description: Requested resource was not found.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-
     TooManyRequests:
-      description: Rate limit exceeded
+      description: Rate limit exceeded.
       headers:
         Retry-After:
           schema:
             type: integer
-          description: Number of seconds to wait before retrying
+          description: Number of seconds to wait before retrying.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-
     InternalError:
-      description: Internal server error
+      description: Internal server error.
       content:
         application/json:
           schema:

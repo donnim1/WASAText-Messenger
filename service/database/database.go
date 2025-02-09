@@ -29,6 +29,7 @@ type AppDatabase interface {
 
 	// CreateGroup creates a new group conversation and adds the creator as a member.
 	CreateGroup(creatorID, groupName, groupPhoto string) (string, error)
+	// Register the GET /groups endpoint.
 	GetGroupsByUserID(userID string) ([]Conversation, error)
 
 	AddToGroup(groupID, userID string) error
@@ -68,89 +69,93 @@ type Message struct {
 	SentAt         string         // using string for simplicity; you may use time.Time
 }
 
-
 // GetGroupsByUserID retrieves all group conversations associated with a user.
 func (db *appdbimpl) GetGroupsByUserID(userID string) ([]Conversation, error) {
-    query := `
+	query := `
       SELECT c.id, c.name, c.is_group, c.created_at, c.group_photo
       FROM conversations c
       JOIN group_members gm ON c.id = gm.group_id
       WHERE gm.user_id = ? AND c.is_group = 1
     `
-    rows, err := db.db.Query(query, userID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to fetch groups: %w", err)
-    }
-    defer rows.Close()
+	rows, err := db.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch groups: %w", err)
+	}
+	defer rows.Close()
 
-    var groups []Conversation
-    for rows.Next() {
-        var conv Conversation
-        // If you want to include group_photo, consider adding it to the Conversation struct.
-        if err := rows.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt, new(interface{})); err != nil {
-            return nil, fmt.Errorf("failed to scan group: %w", err)
-        }
-        groups = append(groups, conv)
-    }
-    if err := rows.Err(); err != nil {
-        return nil, fmt.Errorf("rows iteration error: %w", err)
-    }
-    return groups, nil
+	var groups []Conversation
+	for rows.Next() {
+		var conv Conversation
+		// If you want to include group_photo, consider adding it to the Conversation struct.
+		if err := rows.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt, new(interface{})); err != nil {
+			return nil, fmt.Errorf("failed to scan group: %w", err)
+		}
+		groups = append(groups, conv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return groups, nil
 }
 
-
-// CreateGroup creates a new group conversation and adds the creator as a member.
 func (db *appdbimpl) CreateGroup(creatorID, groupName, groupPhoto string) (string, error) {
-    // Generate a new UUID for the group.
-    groupID, err := GenerateNewID()
-    if err != nil {
-        return "", fmt.Errorf("failed to generate group id: %w", err)
-    }
+	tx, err := db.db.Begin()
+	if err != nil {
+		return "", fmt.Errorf("transaction start failed: %w", err)
+	}
+	defer tx.Rollback()
 
-    // Insert a new group conversation into the conversations table.
-    // Set is_group = 1 to mark it as a group, and store the group name and photo.
-    _, err = db.db.Exec(
-        "INSERT INTO conversations (id, name, is_group, group_photo) VALUES (?, ?, 1, ?)",
-        groupID, groupName, groupPhoto,
-    )
-    if err != nil {
-        return "", fmt.Errorf("failed to create group conversation: %w", err)
-    }
+	// Generate group ID
+	groupID, err := GenerateNewID()
+	if err != nil {
+		return "", fmt.Errorf("ID generation failed: %w", err)
+	}
 
-    // Add the creator to the group_members table.
-    _, err = db.db.Exec(
-        "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
-        groupID, creatorID,
-    )
-    if err != nil {
-        return "", fmt.Errorf("failed to add creator to group_members: %w", err)
-    }
+	// Create conversation
+	_, err = tx.Exec(`INSERT INTO conversations 
+        (id, name, is_group, group_photo) 
+        VALUES (?, ?, 1, ?)`,
+		groupID, groupName, groupPhoto)
+	if err != nil {
+		return "", fmt.Errorf("conversation creation failed: %w", err)
+	}
 
-    return groupID, nil
+	// Add creator as member
+	_, err = tx.Exec(`INSERT INTO group_members 
+        (group_id, user_id) 
+        VALUES (?, ?)`,
+		groupID, creatorID)
+	if err != nil {
+		return "", fmt.Errorf("member addition failed: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("transaction commit failed: %w", err)
+	}
+
+	return groupID, nil
 }
-
 
 func (db *appdbimpl) ListUsers() ([]User, error) {
-    rows, err := db.db.Query("SELECT id, username, photo_url FROM users")
-    if err != nil {
-        return nil, fmt.Errorf("failed to list users: %w", err)
-    }
-    defer rows.Close()
+	rows, err := db.db.Query("SELECT id, username, photo_url FROM users")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	defer rows.Close()
 
-    var users []User
-    for rows.Next() {
-        var user User
-        if err := rows.Scan(&user.ID, &user.Username, &user.PhotoURL); err != nil {
-            return nil, fmt.Errorf("failed to scan user: %w", err)
-        }
-        users = append(users, user)
-    }
-    if err = rows.Err(); err != nil {
-        return nil, fmt.Errorf("rows iteration error: %w", err)
-    }
-    return users, nil
+	var users []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.ID, &user.Username, &user.PhotoURL); err != nil {
+			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+		users = append(users, user)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return users, nil
 }
-
 
 // GetConversation retrieves a conversation and all its messages.
 func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Message, error) {
@@ -256,6 +261,19 @@ func New(db *sql.DB) (AppDatabase, error) {
 	)`)
 	if err != nil {
 		return nil, fmt.Errorf("error creating message_reactions table: %w", err)
+	}
+
+	// In database.go - New() function after creating tables:
+	_, err = db.Exec(`CREATE TRIGGER IF NOT EXISTS check_private_members
+	BEFORE INSERT ON group_members
+	FOR EACH ROW
+	WHEN (SELECT is_group FROM conversations WHERE id = NEW.group_id) = 0
+	BEGIN
+		SELECT RAISE(ABORT, 'private chat cannot have more than two members')
+		WHERE (SELECT COUNT(*) FROM group_members WHERE group_id = NEW.group_id) >= 2;
+	END;`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating check_private_members trigger: %w", err)
 	}
 
 	return &appdbimpl{db: db}, nil
@@ -366,41 +384,75 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 
 // SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
 func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, error) {
+	tx, err := db.db.Begin()
+	if err != nil {
+		return "", fmt.Errorf("transaction start failed: %w", err)
+	}
+	defer tx.Rollback()
+
 	var conversationID string
+
 	if isGroup {
 		conversationID = groupID
+
+		// Verify group membership
+		var exists bool
+		err := tx.QueryRow(`SELECT 1 FROM group_members 
+            WHERE group_id = ? AND user_id = ?`,
+			conversationID, senderID).Scan(&exists)
+		if err != nil {
+			return "", fmt.Errorf("membership verification failed: %w", err)
+		}
 	} else {
-		query := `
-			SELECT id FROM conversations 
-			WHERE is_group = 0 
-			AND id IN (
-				SELECT group_id FROM group_members 
-				WHERE user_id IN (?, ?)
-				GROUP BY group_id HAVING COUNT(user_id) = 2
-			)
-			LIMIT 1;
-		`
-		err := db.db.QueryRow(query, senderID, receiverID).Scan(&conversationID)
+		// Private message logic
+		err := tx.QueryRow(`SELECT c.id FROM conversations c
+            JOIN group_members gm1 ON c.id = gm1.group_id
+            JOIN group_members gm2 ON c.id = gm2.group_id
+            WHERE c.is_group = 0
+            AND gm1.user_id = ?
+            AND gm2.user_id = ?
+            GROUP BY c.id
+            HAVING COUNT(DISTINCT gm1.user_id) = 2`,
+			senderID, receiverID).Scan(&conversationID)
+
 		if errors.Is(err, sql.ErrNoRows) {
+			// Create new conversation
 			conversationID, _ = GenerateNewID()
-			_, err = db.db.Exec("INSERT INTO conversations (id, name, is_group) VALUES (?, NULL, 0)", conversationID)
+			_, err = tx.Exec(`INSERT INTO conversations 
+                (id, is_group) VALUES (?, 0)`,
+				conversationID)
 			if err != nil {
-				return "", fmt.Errorf("failed to create conversation: %w", err)
+				return "", fmt.Errorf("conversation creation failed: %w", err)
 			}
-			_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?), (?, ?)", conversationID, senderID, conversationID, receiverID)
+
+			// Add participants
+			_, err = tx.Exec(`INSERT INTO group_members 
+                (group_id, user_id) 
+                VALUES (?, ?), (?, ?)`,
+				conversationID, senderID,
+				conversationID, receiverID)
 			if err != nil {
-				return "", fmt.Errorf("failed to add users to group_members: %w", err)
+				return "", fmt.Errorf("participant addition failed: %w", err)
 			}
 		} else if err != nil {
-			return "", fmt.Errorf("error checking conversation: %w", err)
+			return "", fmt.Errorf("conversation lookup failed: %w", err)
 		}
 	}
+
+	// Create message
 	messageID, _ := GenerateNewID()
-	_, err := db.db.Exec("INSERT INTO messages (id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)",
+	_, err = tx.Exec(`INSERT INTO messages 
+        (id, conversation_id, sender_id, content) 
+        VALUES (?, ?, ?, ?)`,
 		messageID, conversationID, senderID, content)
 	if err != nil {
-		return "", fmt.Errorf("failed to insert message: %w", err)
+		return "", fmt.Errorf("message creation failed: %w", err)
 	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("transaction commit failed: %w", err)
+	}
+
 	return messageID, nil
 }
 
@@ -466,9 +518,32 @@ func (db *appdbimpl) DeleteMessage(messageID, senderID string) error {
 	return nil
 }
 
-// AddToGroup adds a user to a group by inserting a record into the group_members table.
+// In database.go - AddToGroup function:
 func (db *appdbimpl) AddToGroup(groupID, userID string) error {
-	_, err := db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", groupID, userID)
+	// Verify target is a group
+	var isGroup bool
+	err := db.db.QueryRow("SELECT is_group FROM conversations WHERE id = ?", groupID).Scan(&isGroup)
+	if err != nil {
+		return fmt.Errorf("group verification failed: %w", err)
+	}
+	if !isGroup {
+		return errors.New("cannot add members to private chats")
+	}
+
+	// Check existing membership
+	var exists bool
+	err = db.db.QueryRow("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
+		groupID, userID).Scan(&exists)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("membership check failed: %w", err)
+	}
+	if exists {
+		return nil // Already member, return success
+	}
+
+	// Proceed with insertion
+	_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
+		groupID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to add user to group: %w", err)
 	}
