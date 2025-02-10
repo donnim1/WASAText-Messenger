@@ -9,12 +9,12 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// GetMyConversationsResponse defines the structure of the response after fetching the conversations.
+// getMyConversationsResponse defines the structure of the response after fetching conversations.
 type getMyConversationsResponse struct {
 	Conversations []Conversation `json:"conversations"`
 }
 
-// Conversation defines a structure for each conversation in the response.
+// Conversation defines the API's conversation structure.
 type Conversation struct {
 	ID        string `json:"id"`         // Conversation ID
 	Name      string `json:"name"`       // Name of the conversation (group name or null for private chats)
@@ -22,7 +22,7 @@ type Conversation struct {
 	CreatedAt string `json:"created_at"` // Timestamp of when the conversation was created
 }
 
-// getMyConversations retrieves all the conversations for the authenticated user.
+// getMyConversations retrieves all conversations for the authenticated user.
 func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// 1. Get the authenticated user ID from the Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
@@ -32,15 +32,15 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 	}
 
 	// 2. Fetch conversations from the database using the authenticated user ID.
-	conversations, err := rt.db.GetConversationsByUserID(userID)
+	convs, err := rt.db.GetConversationsByUserID(userID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve conversations: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// 3. Convert database.Conversation to the API's Conversation type.
+	// 3. Convert each database conversation into the API's Conversation type.
 	var apiConversations []Conversation
-	for _, conv := range conversations {
+	for _, conv := range convs {
 		apiConversations = append(apiConversations, Conversation{
 			ID:        conv.ID,
 			Name:      conv.Name,
@@ -55,7 +55,7 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 	if err := json.NewEncoder(w).Encode(getMyConversationsResponse{
 		Conversations: apiConversations,
 	}); err != nil {
-		log.Printf("Error encoding response: %v", err)
+		log.Printf("Error encoding getMyConversations response: %v", err)
 	}
 }
 
@@ -75,32 +75,40 @@ func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps ht
 		return
 	}
 
-	// 3. Call the database function to get conversation details and messages.
+	// 3. Retrieve conversation details and messages from the database.
 	conv, messages, err := rt.db.GetConversation(conversationID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve conversation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// 4. Check if conversation was found.
+	// 4. Check if a conversation was found.
 	if conv == nil {
 		http.Error(w, "Conversation not found", http.StatusNotFound)
 		return
 	}
 
-	// 5. Build the response.
+	// 5. Convert the database conversation into the API's Conversation type.
+	apiConv := Conversation{
+		ID:        conv.ID,
+		Name:      conv.Name,
+		IsGroup:   conv.IsGroup,
+		CreatedAt: conv.CreatedAt,
+	}
+
+	// 6. Build the response containing conversation details and messages.
 	response := struct {
-		Conversation *database.Conversation `json:"conversation"`
-		Messages     []database.Message     `json:"messages"`
+		Conversation Conversation       `json:"conversation"`
+		Messages     []database.Message `json:"messages"`
 	}{
-		Conversation: conv,
+		Conversation: apiConv,
 		Messages:     messages,
 	}
 
-	// 6. Return the response.
+	// 7. Return the response.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding response: %v", err)
+		log.Printf("Error encoding getConversation response: %v", err)
 	}
 }

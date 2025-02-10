@@ -1,19 +1,17 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
+import Login from '../components/Login.vue';
 import MyProfile from '../views/MyProfile.vue';
 import UserList from '../views/UserList.vue';
-import ChatView from '../views/ChatView.vue';
 import GroupView from '../views/GroupView.vue';
-
+import ChatApp from '../views/ChatApp.vue';
 
 const routes = [
-  { path: '/Myprofile', component: MyProfile },
-  { path: '/users', component: UserList }, // New route for listing users
-  { path: '/chat/:conversationId', component: ChatView },
-  { path: '/groups', component: GroupView },
+  { path: '/', component: Login },
+  { path: '/myprofile', component: MyProfile },
   { path: '/users', component: UserList },
+  { path: '/groups', component: GroupView },
+  { path: '/chat', component: ChatApp },
 ];
-
-
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),

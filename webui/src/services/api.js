@@ -1,6 +1,6 @@
 import axios from './axios.js';
 
-// ✅ Login Function (Fixing structure)
+// Login Function
 export async function login(username) {
   try {
     const response = await axios.post('/session', { name: username });
@@ -10,27 +10,33 @@ export async function login(username) {
   }
 }
 
-// ✅ Update Username
+// Update Username
 export function updateUsername(newUsername) {
   return axios.put('/user/username', { newName: newUsername });
 }
 
-// ✅ Update Profile Photo (Supports FormData Uploads)
+// Update Profile Photo (using FormData)
 export function updatePhoto(formData) {
   return axios.put('/user/photo', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    }
+    headers: { 'Content-Type': 'multipart/form-data' }
   });
 }
 
-
-// ✅ Fetch All Users
+// List all Users
 export function listUsers() {
   return axios.get('/users');
 }
 
-// ✅ Messaging Endpoints
+// Conversations
+export function getMyConversations() {
+  return axios.get('/conversation/myconversations');
+}
+
+export function getConversation(conversationId) {
+  return axios.get(`/conversations/${conversationId}`);
+}
+
+// Messaging Endpoints
 export function sendMessage({ receiverId, content, isGroup, groupId }) {
   return axios.post('/messages', { receiverId, content, isGroup, groupId });
 }
@@ -51,7 +57,7 @@ export function deleteMessage(messageId) {
   return axios.delete(`/messages/${messageId}/delete`);
 }
 
-// ✅ Group Management
+// Group Management Endpoints
 export function listUserGroups() {
   return axios.get('/groups');
 }

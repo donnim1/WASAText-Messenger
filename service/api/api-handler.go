@@ -18,13 +18,14 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.GET("/users", rt.listUsers)
 
 	rt.router.GET("/conversation/myconversations", rt.getMyConversations)
-	rt.router.GET("/conversations/{conversationId}", rt.getConversation)
+	rt.router.GET("/conversations/:conversationId", rt.getConversation)
 
 	rt.router.POST("/messages", rt.sendMessage)
-	rt.router.POST("/messages/{messageId}/forward", rt.forwardMessage)
-	rt.router.POST("/messages/{messageId}/comments", rt.commentMessage)
-	rt.router.DELETE("/messages/{messageId}/uncomment", rt.uncommentMessage)
-	rt.router.DELETE("/messages/{messageId}/delete", rt.deleteMessage)
+	rt.router.POST("/messages/:messageId/forward", rt.forwardMessage)
+
+	rt.router.POST("/messages/:messageId/comments", rt.commentMessage)
+	rt.router.DELETE("/messages/:messageId/uncomment", rt.uncommentMessage)
+	rt.router.DELETE("/messages/:messageId/delete", rt.deleteMessage)
 
 	// Group endpoints
 
