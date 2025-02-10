@@ -73,9 +73,15 @@ export default {
     });
 
     function openChatWithUser(user) {
-  // Navigate to ChatView and pass the receiver's ID as a query parameter.
-  router.push({ name: 'ChatView', query: { receiverId: user.id } });
+  // Use user.conversationId if it exists; otherwise, pass an empty string.
+  const conversationId = user.conversationId || "";
+  router.push({
+    name: 'ChatView',
+    params: { conversationId },
+    query: { receiverId: user.id, receiverName: user.username }
+  });
 }
+
 
 
     onMounted(() => {

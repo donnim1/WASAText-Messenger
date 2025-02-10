@@ -119,7 +119,10 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 		// Respond with the new photo URL
 		response := map[string]string{"photoUrl": photoURL}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Error encoding JSON response: %v", err)
+		}
+
 		log.Println("✅ Photo successfully updated:", photoURL)
 		return
 	}
@@ -143,7 +146,10 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 		// Respond with success
 		response := map[string]string{"photoUrl": req.PhotoURL}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Error encoding JSON response: %v", err)
+		}
+
 		log.Println("✅ Photo URL successfully updated:", req.PhotoURL)
 		return
 	}

@@ -104,7 +104,12 @@ func (db *appdbimpl) CreateGroup(creatorID, groupName, groupPhoto string) (strin
 	if err != nil {
 		return "", fmt.Errorf("transaction start failed: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+			log.Printf("tx.Rollback() error: %v", rbErr)
+		}
+	}()
+	
 
 	// Generate group ID
 	groupID, err := GenerateNewID()
@@ -397,7 +402,12 @@ func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup b
 	if err != nil {
 		return "", fmt.Errorf("transaction start failed: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+			log.Printf("tx.Rollback() error: %v", rbErr)
+		}
+	}()
+	
 
 	var conversationID string
 
