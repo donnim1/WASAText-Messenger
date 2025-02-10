@@ -152,7 +152,6 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 	http.Error(w, "Invalid request", http.StatusBadRequest)
 }
 
-
 // listUsersResponse defines the JSON response for listing users.
 type listUsersResponse struct {
 	Users []UserSummary `json:"users"`

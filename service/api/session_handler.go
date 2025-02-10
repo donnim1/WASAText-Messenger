@@ -13,7 +13,7 @@ type loginRequest struct {
 	Username string `json:"name"`
 }
 
-/// Update the loginResponse struct to include username and photo URL.
+// / Update the loginResponse struct to include username and photo URL.
 type loginResponse struct {
 	Identifier string `json:"identifier"`
 	Username   string `json:"username"`

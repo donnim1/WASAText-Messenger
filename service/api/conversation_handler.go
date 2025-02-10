@@ -9,7 +9,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-
 // GetMyConversationsResponse defines the structure of the response after fetching the conversations.
 type getMyConversationsResponse struct {
 	Conversations []Conversation `json:"conversations"`
