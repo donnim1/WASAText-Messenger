@@ -81,3 +81,5 @@ export function setGroupName(groupId, newName) {
 export function setGroupPhoto(groupId, photoUrl) {
   return axios.put(`/groups/${groupId}/photo`, { photoUrl });
 }
+
+

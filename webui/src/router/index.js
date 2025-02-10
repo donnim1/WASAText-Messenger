@@ -3,6 +3,7 @@ import Login from '../components/Login.vue';
 import MyProfile from '../views/MyProfile.vue';
 import UserList from '../views/UserList.vue';
 import GroupView from '../views/GroupView.vue';
+import ChatView from '../views/ChatView.vue';
 import ChatApp from '../views/ChatApp.vue';
 
 const routes = [
@@ -10,7 +11,7 @@ const routes = [
   { path: '/myprofile', component: MyProfile },
   { path: '/users', component: UserList },
   { path: '/groups', component: GroupView },
-  { path: '/chat', component: ChatApp },
+  { path: '/chat', name: 'ChatView', component: ChatView },
 ];
 
 const router = createRouter({

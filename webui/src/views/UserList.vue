@@ -1,14 +1,31 @@
 <template>
   <div class="user-list-view">
     <h1>Contacts</h1>
+    <!-- Search Field -->
+    <div class="search-container">
+      <input
+        v-model="searchQuery"
+        placeholder="Search contacts..."
+        class="search-input"
+      />
+    </div>
+    <!-- Refresh Button -->
     <button @click="refreshUsers" class="refresh-button">Refresh Contacts</button>
+    <!-- Error Message -->
     <div v-if="error" class="error">{{ error }}</div>
+    <!-- Contacts List -->
     <ul class="contact-list">
-      <li v-for="user in users" :key="user.id" class="contact-item">
-        <img :src="user.photoUrl || defaultPhoto" alt="User Photo" class="contact-photo" />
+      <li v-for="user in filteredUsers" :key="user.id" class="contact-item">
+        <img
+          :src="user.photoUrl || defaultPhoto"
+          alt="User Photo"
+          class="contact-photo"
+        />
         <div class="contact-info">
           <span class="contact-name">{{ user.username }}</span>
-          <button class="chat-button" @click="openChatWithUser(user)">Chat</button>
+          <button class="chat-button" @click="openChatWithUser(user)">
+            Chat
+          </button>
         </div>
       </li>
     </ul>
@@ -16,39 +33,64 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
-import { listUsers } from '@/services/api.js';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted } from "vue";
+import { listUsers } from "@/services/api.js";
+import { useRouter } from "vue-router";
 
 export default {
-  name: 'UserList',
+  name: "UserList",
   setup() {
     const users = ref([]);
     const error = ref("");
-    const defaultPhoto = "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
+    const searchQuery = ref("");
+    const defaultPhoto =
+      "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
     const router = useRouter();
+    const currentUserID = localStorage.getItem("userID");
 
+    // Fetch users from the backend and filter out the currently logged-in user.
     async function refreshUsers() {
       error.value = "";
       try {
         const response = await listUsers();
-        users.value = response.data.users;
+        // Filter out the logged-in user.
+        users.value = response.data.users.filter(
+          (u) => u.id !== currentUserID
+        );
       } catch (err) {
         error.value = "Failed to load contacts.";
         console.error(err);
       }
     }
 
+    // Computed property for filtering based on the search query.
+    const filteredUsers = computed(() => {
+      if (!searchQuery.value) return users.value;
+      const query = searchQuery.value.toLowerCase();
+      return users.value.filter((user) =>
+        user.username.toLowerCase().includes(query)
+      );
+    });
+
     function openChatWithUser(user) {
-      // Navigate to ChatView (ensure your router has a named route 'ChatView')
-      router.push({ name: 'ChatView', query: { receiverId: user.id } });
-    }
+  // Navigate to ChatView and pass the receiver's ID as a query parameter.
+  router.push({ name: 'ChatView', query: { receiverId: user.id } });
+}
+
 
     onMounted(() => {
       refreshUsers();
     });
 
-    return { users, error, defaultPhoto, refreshUsers, openChatWithUser };
+    return {
+      users,
+      error,
+      defaultPhoto,
+      refreshUsers,
+      openChatWithUser,
+      searchQuery,
+      filteredUsers,
+    };
   },
 };
 </script>
@@ -61,6 +103,19 @@ export default {
   background-color: #f8f9fa;
 }
 
+/* Search field styling */
+.search-container {
+  margin-bottom: 10px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* Refresh button */
 .refresh-button {
   background-color: #27ae60;
   color: white;
@@ -75,6 +130,7 @@ export default {
   background-color: #219150;
 }
 
+/* Contact list styles */
 .contact-list {
   list-style: none;
   padding: 0;

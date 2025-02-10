@@ -3,7 +3,7 @@
     <Login v-if="!userID" @loggedIn="handleLogin" />
     <div v-else>
       <header class="navbar navbar-dark bg-dark p-0 shadow">
-        <a class="navbar-brand px-3 fs-6" href="#">WASATEXT</a>
+        <a class="navbar-brand px-3 fs-6" >WASATEXT</a>
         <nav>
           
           <router-link to="/myprofile">My Profile</router-link>
