@@ -22,7 +22,7 @@
     setup() {
       const users = ref([]);
       const error = ref("");
-      const defaultPhoto = "https://via.placeholder.com/50?text=No+Photo";
+      const defaultPhoto = "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
   
       async function refreshUsers() {
         error.value = "";

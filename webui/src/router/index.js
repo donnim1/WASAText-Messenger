@@ -6,7 +6,7 @@ import GroupView from '../views/GroupView.vue';
 
 
 const routes = [
-  { path: '/myprofile', component: MyProfile },
+  { path: '/Myprofile', component: MyProfile },
   { path: '/users', component: UserList }, // New route for listing users
   { path: '/chat/:conversationId', component: ChatView },
   { path: '/groups', component: GroupView },

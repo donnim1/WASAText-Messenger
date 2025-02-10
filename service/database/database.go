@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/gofrs/uuid"
 )
@@ -329,17 +330,25 @@ func (db *appdbimpl) UpdateUserName(userID, newName string) error {
 
 // UpdateUserPhoto updates the profile photo URL for the specified user ID.
 func (db *appdbimpl) UpdateUserPhoto(userID, photoUrl string) error {
+	// Execute update query
 	res, err := db.db.Exec("UPDATE users SET photo_url = ? WHERE id = ?", photoUrl, userID)
 	if err != nil {
+		log.Printf("❌ Database update error: %v", err)
 		return fmt.Errorf("failed to update photo: %w", err)
 	}
+
+	// Check if any row was updated
 	affected, err := res.RowsAffected()
 	if err != nil {
+		log.Printf("❌ Error checking rows affected: %v", err)
 		return fmt.Errorf("failed to update photo: %w", err)
 	}
 	if affected == 0 {
-		return errors.New("no user found to update photo")
+		log.Println("⚠️ No user found to update photo")
+		return fmt.Errorf("no user found with given ID")
 	}
+
+	log.Println("✅ Photo successfully updated in database")
 	return nil
 }
 

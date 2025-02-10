@@ -2,10 +2,9 @@
   <div id="app">
     <Login v-if="!userID" @loggedIn="handleLogin" />
     <div v-else>
-      <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fs-6" href="#/">WASATEXT</a>
+      <header class="navbar navbar-dark bg-dark p-0 shadow">
+        <a class="navbar-brand px-3 fs-6" href="#">WASATEXT</a>
         <nav>
-          
           <router-link to="/myprofile">My Profile</router-link>
           <router-link to="/users">User Directory</router-link>
           <router-link to="/groups">Groups</router-link>
@@ -18,31 +17,38 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import Login from './components/Login.vue';
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import Login from "./components/Login.vue";
 
-const userID = ref(localStorage.getItem('userID') || '');
+const userID = ref(localStorage.getItem("userID") || "");
+const username = ref(localStorage.getItem("username") || "Anonymous");
+const photoUrl = ref(localStorage.getItem("photoUrl") || "");
+
+const defaultPhoto = "https://via.placeholder.com/50?text=Photo";
 const router = useRouter();
 
-function handleLogin(id) {
-  localStorage.setItem('userID', id);
-  // Optionally, also clear profile details so the new login refreshes them.
-  localStorage.removeItem('username');
-  localStorage.removeItem('photoUrl');
+function handleLogin(id, name, photo) {
+  localStorage.setItem("userID", id);
+  localStorage.setItem("username", name);
+  localStorage.setItem("photoUrl", photo || "");
+
   userID.value = id;
-  router.push('/');
+  username.value = name;
+  photoUrl.value = photo || "";
+
+  router.push("/myprofile");
 }
 
 function logout() {
-  localStorage.removeItem('userID');
-  localStorage.removeItem('username');
-  localStorage.removeItem('photoUrl');
-  userID.value = '';
-  router.push('/login');
+  localStorage.removeItem("userID");
+  localStorage.removeItem("username");
+  localStorage.removeItem("photoUrl");
+
+  userID.value = "";
+  username.value = "Anonymous";
+  photoUrl.value = defaultPhoto;
+
+  router.push("/");
 }
 </script>
-
-<style>
-/* Global styles (if any) */
-</style>  

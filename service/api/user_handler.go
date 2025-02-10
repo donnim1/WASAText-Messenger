@@ -2,8 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -60,101 +64,140 @@ func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, _ httpr
 
 // userPhotoUpdateRequest defines the expected JSON payload for updating the user photo.
 type userPhotoUpdateRequest struct {
-	UserID   string `json:"id"`       // User identifier (typically derived from auth, here passed explicitly)
-	PhotoURL string `json:"photoUrl"` // New photo URL to update to
-}
-
-// userPhotoUpdateResponse defines the response after updating the profile photo.
-type userPhotoUpdateResponse struct {
-	Message string `json:"message"`
+	UserID   string `json:"id"`                 // User identifier (typically derived from auth, here passed explicitly)
+	PhotoURL string `json:"photoUrl,omitempty"` // New photo URL to update to
 }
 
 // setMyPhoto updates the user's profile photo.
+// ✅ Fix the `setMyPhoto` function to handle both URL and file upload.
 func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-
-	// Validate the Authorization header
+	// Extract authenticated user ID from JWT or session
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	// 1. Parse the request body
+
+	// Try handling file upload
+	file, header, err := r.FormFile("photo")
+	if err == nil { // No error → File upload is happening
+		defer file.Close() // Ensure the file is closed properly
+
+		// Ensure upload directory exists
+		uploadDir := "uploads/"
+		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+			log.Printf("❌ Failed to create upload directory: %v", err)
+			http.Error(w, "Server error: cannot create directory", http.StatusInternalServerError)
+			return
+		}
+
+		// Save file to uploads directory
+		filePath := filepath.Join(uploadDir, header.Filename)
+		out, err := os.Create(filePath)
+		if err != nil {
+			log.Printf("❌ Failed to create file: %v", err)
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+		defer out.Close()
+
+		// Copy file contents
+		if _, err := io.Copy(out, file); err != nil {
+			log.Printf("❌ Failed to write file: %v", err)
+			http.Error(w, "Failed to write file", http.StatusInternalServerError)
+			return
+		}
+
+		// Save file URL to database
+		photoURL := fmt.Sprintf("http://localhost:3000/%s", filePath)
+		if err := rt.db.UpdateUserPhoto(userID, photoURL); err != nil {
+			log.Printf("❌ Database update failed: %v", err)
+			http.Error(w, "Failed to update photo in database", http.StatusInternalServerError)
+			return
+		}
+
+		// Respond with the new photo URL
+		response := map[string]string{"photoUrl": photoURL}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		log.Println("✅ Photo successfully updated:", photoURL)
+		return
+	}
+
+	// If file upload fails, try JSON-based photo update
 	var req userPhotoUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request format", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+		if req.PhotoURL == "" {
+			log.Println("❌ Invalid photo URL received")
+			http.Error(w, "Invalid photo URL", http.StatusBadRequest)
+			return
+		}
+
+		// Update database
+		if err := rt.db.UpdateUserPhoto(userID, req.PhotoURL); err != nil {
+			log.Printf("❌ Database update failed: %v", err)
+			http.Error(w, "Failed to update photo URL", http.StatusInternalServerError)
+			return
+		}
+
+		// Respond with success
+		response := map[string]string{"photoUrl": req.PhotoURL}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		log.Println("✅ Photo URL successfully updated:", req.PhotoURL)
 		return
 	}
 
-	// 2. Validate that PhotoURL is not empty
-	if req.PhotoURL == "" {
-		http.Error(w, "Photo URL cannot be empty", http.StatusBadRequest)
-		return
-	}
-
-	// 3. Update the photo in the database
-	err = rt.db.UpdateUserPhoto(userID, req.PhotoURL)
-	if err != nil {
-		http.Error(w, "Failed to update photo: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 4. Return a success response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(userPhotoUpdateResponse{
-		Message: "Photo updated successfully",
-	}); err != nil {
-		// Log the error. The response is already sent, so this is only for debugging.
-		log.Printf("Error encoding response: %v", err)
-	}
-
+	log.Printf("❌ JSON decoding error: %v", err)
+	http.Error(w, "Invalid request", http.StatusBadRequest)
 }
+
 
 // listUsersResponse defines the JSON response for listing users.
 type listUsersResponse struct {
-    Users []UserSummary `json:"users"`
+	Users []UserSummary `json:"users"`
 }
 
 // UserSummary represents a simplified user object.
 type UserSummary struct {
-    ID       string `json:"id"`
-    Username string `json:"username"`
-    PhotoURL string `json:"photoUrl"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	PhotoURL string `json:"photoUrl"`
 }
 
 // listUsers handles GET requests to /users and returns all users.
 func (rt *_router) listUsers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-    // (Optional) Validate Authorization header if you want only authenticated users to view the list.
-    _, err := rt.getAuthenticatedUserID(r)
-    if err != nil {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
+	// (Optional) Validate Authorization header if you want only authenticated users to view the list.
+	_, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    // Call the database function to list users.
-    users, err := rt.db.ListUsers()
-    if err != nil {
-        http.Error(w, "Failed to list users: "+err.Error(), http.StatusInternalServerError)
-        return
-    }
+	// Call the database function to list users.
+	users, err := rt.db.ListUsers()
+	if err != nil {
+		http.Error(w, "Failed to list users: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    // Build a response slice with just the summary info.
-    var summaries []UserSummary
-    for _, u := range users {
-        photo := ""
-        if u.PhotoURL.Valid {
-            photo = u.PhotoURL.String
-        }
-        summaries = append(summaries, UserSummary{
-            ID:       u.ID,
-            Username: u.Username,
-            PhotoURL: photo,
-        })
-    }
+	// Build a response slice with just the summary info.
+	var summaries []UserSummary
+	for _, u := range users {
+		photo := ""
+		if u.PhotoURL.Valid {
+			photo = u.PhotoURL.String
+		}
+		summaries = append(summaries, UserSummary{
+			ID:       u.ID,
+			Username: u.Username,
+			PhotoURL: photo,
+		})
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusOK)
-    if err := json.NewEncoder(w).Encode(listUsersResponse{Users: summaries}); err != nil {
-        log.Printf("Error encoding response: %v", err)
-    }
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(listUsersResponse{Users: summaries}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }

@@ -130,10 +130,19 @@ func run() error {
 	// Apply CORS policy
 	router = applyCORSHandler(router)
 
-	// Create the API server
+	// Create a new ServeMux to combine static file serving and your API router.
+	mux := http.NewServeMux()
+
+	// Serve static files from the "uploads" directory at the "/uploads/" URL path.
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
+
+	// Handle all other routes with your API router.
+	mux.Handle("/", router)
+
+	// Create the API server using the new mux as the handler.
 	apiserver := http.Server{
 		Addr:              cfg.Web.APIHost,
-		Handler:           router,
+		Handler:           mux,
 		ReadTimeout:       cfg.Web.ReadTimeout,
 		ReadHeaderTimeout: cfg.Web.ReadTimeout,
 		WriteTimeout:      cfg.Web.WriteTimeout,

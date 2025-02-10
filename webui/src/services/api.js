@@ -1,72 +1,77 @@
 import axios from './axios.js';
 
-// Update the current user's username
+// ✅ Login Function (Fixing structure)
+export async function login(username) {
+  try {
+    const response = await axios.post('/session', { name: username });
+    return response.data; // { identifier, username, photoUrl }
+  } catch (error) {
+    throw error.response?.data || 'Login failed. Please try again.';
+  }
+}
+
+// ✅ Update Username
 export function updateUsername(newUsername) {
   return axios.put('/user/username', { newName: newUsername });
 }
 
-// Update the current user's profile photo
-export function updatePhoto(newPhotoUrl) {
-  return axios.put('/user/photo', { photoUrl: newPhotoUrl });
+// ✅ Update Profile Photo (Supports FormData Uploads)
+export function updatePhoto(formData) {
+  return axios.put('/user/photo', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    }
+  });
 }
 
-// List all users (for example, for a user directory)
+
+// ✅ Fetch All Users
 export function listUsers() {
-    return axios.get('/users');
-  }
+  return axios.get('/users');
+}
 
-// Send a message (private or group)
+// ✅ Messaging Endpoints
 export function sendMessage({ receiverId, content, isGroup, groupId }) {
-  return axios.post('/message', { receiverId, content, isGroup, groupId });
+  return axios.post('/messages', { receiverId, content, isGroup, groupId });
 }
 
-// Forward a message
 export function forwardMessage(messageId, targetConversationId) {
-  return axios.post(`/message/${messageId}/forward`, { targetConversationId });
+  return axios.post(`/messages/${messageId}/forward`, { targetConversationId });
 }
 
-// Comment on a message
 export function commentMessage(messageId, reaction) {
-  return axios.post(`/message/${messageId}/comment`, { reaction });
+  return axios.post(`/messages/${messageId}/comments`, { reaction });
 }
 
-// Remove (uncomment) a message comment
 export function uncommentMessage(messageId) {
-  return axios.delete(`/message/${messageId}/comment`);
+  return axios.delete(`/messages/${messageId}/uncomment`);
 }
 
-// Delete a message
 export function deleteMessage(messageId) {
-  // Note: For DELETE requests with a body, we use "data" in the config.
-  return axios.delete(`/message/${messageId}/delete`, { data: {} });
+  return axios.delete(`/messages/${messageId}/delete`);
 }
 
-// ----- Group Endpoints ----- //
-
-// List all groups the authenticated user is a member of.
+// ✅ Group Management
 export function listUserGroups() {
   return axios.get('/groups');
 }
 
-// For example, your other functions might be:
 export function createGroup(data) {
   return axios.post('/groups/create', data);
 }
 
 export function addUserToGroup(groupId, targetUserId) {
-  return axios.post('/groups/add', { groupId, userId: targetUserId });
+  return axios.post(`/groups/${groupId}/members`, { userId: targetUserId });
 }
 
 export function leaveGroup(groupId) {
-  return axios.delete('/groups/leave', { data: { groupId } });
+  return axios.delete(`/groups/${groupId}/leave`);
 }
 
-// Update group name
 export function setGroupName(groupId, newName) {
-  return axios.put('/groups/name', { groupId, newName });
+  return axios.put(`/groups/${groupId}/name`, { newName });
 }
 
-// Update group photo
 export function setGroupPhoto(groupId, photoUrl) {
-  return axios.put('/groups/photo', { groupId, photoUrl });
+  return axios.put(`/groups/${groupId}/photo`, { photoUrl });
 }

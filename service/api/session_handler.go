@@ -13,50 +13,55 @@ type loginRequest struct {
 	Username string `json:"name"`
 }
 
-// loginResponse defines the response structure.
+/// Update the loginResponse struct to include username and photo URL.
 type loginResponse struct {
 	Identifier string `json:"identifier"`
+	Username   string `json:"username"`
+	PhotoURL   string `json:"photoUrl,omitempty"`
 }
 
 func (rt *_router) postSession(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// 1. Parse the request
 	var req loginRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid request format", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// 2. Validate the username length
-	if len(req.Username) < 3 || len(req.Username) > 16 {
-		http.Error(w, "Username must be 3-16 characters", http.StatusBadRequest)
-		return
-	}
-
-	// 3. Check if user already exists in the database.
+	// Check if user exists.
 	user, err := rt.db.GetUserByUsername(req.Username)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	var userID string
+	var userID, username, photoURL string
+
 	if user != nil {
-		// User exists. Use existing identifier.
+		// Existing user: retrieve stored details.
 		userID = user.ID
+		username = user.Username
+		if user.PhotoURL.Valid {
+			photoURL = user.PhotoURL.String
+		}
 	} else {
-		// If user does not exist, create a new user.
+		// Create new user.
 		userID, err = rt.db.CreateUser(req.Username)
 		if err != nil {
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			return
 		}
+		username = req.Username // New users use the provided username.
+		photoURL = ""           // New users have no photo initially.
 	}
 
-	// 4. Return the user identifier.
+	// Return the login response with user details.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(loginResponse{Identifier: userID}); err != nil {
+	if err := json.NewEncoder(w).Encode(loginResponse{
+		Identifier: userID,
+		Username:   username,
+		PhotoURL:   photoURL,
+	}); err != nil {
 		log.Printf("Error encoding login response: %v", err)
 	}
 }
