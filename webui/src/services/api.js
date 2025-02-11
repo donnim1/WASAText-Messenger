@@ -14,7 +14,7 @@ export async function login(username) {
 export function updateUsername(newUsername) {
   return axios.put('/user/username', { newName: newUsername });
 }
-
+ 
 // Update Profile Photo (using FormData)
 export function updatePhoto(formData) {
   return axios.put('/user/photo', formData, {

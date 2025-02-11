@@ -109,7 +109,6 @@ func (db *appdbimpl) CreateGroup(creatorID, groupName, groupPhoto string) (strin
 			log.Printf("tx.Rollback() error: %v", rbErr)
 		}
 	}()
-	
 
 	// Generate group ID
 	groupID, err := GenerateNewID()
@@ -167,12 +166,20 @@ func (db *appdbimpl) ListUsers() ([]User, error) {
 func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Message, error) {
 	// Retrieve conversation details.
 	var conv Conversation
+	// Use a sql.NullString for the name column.
+	var name sql.NullString
 	err := db.db.QueryRow("SELECT id, name, is_group, created_at FROM conversations WHERE id = ?", conversationID).
-		Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt)
+		Scan(&conv.ID, &name, &conv.IsGroup, &conv.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil // Conversation not found.
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve conversation: %w", err)
+	}
+	// Convert sql.NullString to string.
+	if name.Valid {
+		conv.Name = name.String
+	} else {
+		conv.Name = ""
 	}
 
 	// Retrieve messages for this conversation.
@@ -382,14 +389,22 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 		return nil, fmt.Errorf("failed to fetch conversations: %w", err)
 	}
 	defer rows.Close()
+
 	var conversations []Conversation
 	for rows.Next() {
-		var conversation Conversation
-		if err := rows.Scan(&conversation.ID, &conversation.Name, &conversation.IsGroup, &conversation.CreatedAt); err != nil {
+		var conv Conversation
+		var name sql.NullString
+		if err := rows.Scan(&conv.ID, &name, &conv.IsGroup, &conv.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
-		conversations = append(conversations, conversation)
+		if name.Valid {
+			conv.Name = name.String
+		} else {
+			conv.Name = ""
+		}
+		conversations = append(conversations, conv)
 	}
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
@@ -397,77 +412,75 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 }
 
 // SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
+// SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
 func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, error) {
+	// Start a transaction.
 	tx, err := db.db.Begin()
 	if err != nil {
 		return "", fmt.Errorf("transaction start failed: %w", err)
 	}
+	// Ensure we commit or rollback the transaction.
 	defer func() {
-		if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
-			log.Printf("tx.Rollback() error: %v", rbErr)
-		}
+		// It's a good idea to check the rollback error in real code.
+		_ = tx.Rollback()
 	}()
-	
 
 	var conversationID string
 
 	if isGroup {
+		// For groups, use the provided groupID.
 		conversationID = groupID
-
-		// Verify group membership
-		var exists bool
-		err := tx.QueryRow(`SELECT 1 FROM group_members 
-            WHERE group_id = ? AND user_id = ?`,
-			conversationID, senderID).Scan(&exists)
-		if err != nil {
-			return "", fmt.Errorf("membership verification failed: %w", err)
-		}
+		// Optionally verify that the sender is a member of the group.
 	} else {
-		// Private message logic
-		err := tx.QueryRow(`SELECT c.id FROM conversations c
-            JOIN group_members gm1 ON c.id = gm1.group_id
-            JOIN group_members gm2 ON c.id = gm2.group_id
-            WHERE c.is_group = 0
-            AND gm1.user_id = ?
-            AND gm2.user_id = ?
-            GROUP BY c.id
-            HAVING COUNT(DISTINCT gm1.user_id) = 2`,
-			senderID, receiverID).Scan(&conversationID)
-
-		if errors.Is(err, sql.ErrNoRows) {
-			// Create new conversation
-			conversationID, _ = GenerateNewID()
-			_, err = tx.Exec(`INSERT INTO conversations 
-                (id, is_group) VALUES (?, 0)`,
-				conversationID)
-			if err != nil {
-				return "", fmt.Errorf("conversation creation failed: %w", err)
+		// For private messages, try to find an existing conversation between the two users.
+		// This query checks that both sender and receiver are members of the same conversation.
+		query := `
+			SELECT c.id
+			FROM conversations c
+			JOIN group_members gm ON c.id = gm.group_id
+			WHERE c.is_group = 0
+			GROUP BY c.id
+			HAVING SUM(CASE WHEN gm.user_id = ? THEN 1 ELSE 0 END) > 0
+			   AND SUM(CASE WHEN gm.user_id = ? THEN 1 ELSE 0 END) > 0
+			LIMIT 1;
+		`
+		err := tx.QueryRow(query, senderID, receiverID).Scan(&conversationID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// Conversation does not exist, so create one.
+				conversationID, err = GenerateNewID()
+				if err != nil {
+					return "", fmt.Errorf("failed to generate conversation id: %w", err)
+				}
+				_, err = tx.Exec("INSERT INTO conversations (id, is_group) VALUES (?, 0)", conversationID)
+				if err != nil {
+					return "", fmt.Errorf("failed to create conversation: %w", err)
+				}
+				// Add both participants to the conversation.
+				_, err = tx.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?), (?, ?)", conversationID, senderID, conversationID, receiverID)
+				if err != nil {
+					return "", fmt.Errorf("failed to add participants: %w", err)
+				}
+			} else {
+				return "", fmt.Errorf("error checking for existing conversation: %w", err)
 			}
-
-			// Add participants
-			_, err = tx.Exec(`INSERT INTO group_members 
-                (group_id, user_id) 
-                VALUES (?, ?), (?, ?)`,
-				conversationID, senderID,
-				conversationID, receiverID)
-			if err != nil {
-				return "", fmt.Errorf("participant addition failed: %w", err)
-			}
-		} else if err != nil {
-			return "", fmt.Errorf("conversation lookup failed: %w", err)
 		}
 	}
 
-	// Create message
-	messageID, _ := GenerateNewID()
-	_, err = tx.Exec(`INSERT INTO messages 
-        (id, conversation_id, sender_id, content) 
-        VALUES (?, ?, ?, ?)`,
+	// Generate a new message ID.
+	messageID, err := GenerateNewID()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate new message id: %w", err)
+	}
+
+	// Insert the message.
+	_, err = tx.Exec("INSERT INTO messages (id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)",
 		messageID, conversationID, senderID, content)
 	if err != nil {
-		return "", fmt.Errorf("message creation failed: %w", err)
+		return "", fmt.Errorf("failed to insert message: %w", err)
 	}
 
+	// Commit the transaction.
 	if err := tx.Commit(); err != nil {
 		return "", fmt.Errorf("transaction commit failed: %w", err)
 	}

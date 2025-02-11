@@ -1,15 +1,15 @@
+<!-- src/App.vue -->
 <template>
   <div id="app">
     <Login v-if="!userID" @loggedIn="handleLogin" />
     <div v-else>
       <header class="navbar navbar-dark bg-dark p-0 shadow">
-        <a class="navbar-brand px-3 fs-6" >WASATEXT</a>
+        <a class="navbar-brand px-3 fs-6" href="#">WASATEXT</a>
         <nav>
-          
           <router-link to="/myprofile">My Profile</router-link>
-          <router-link to="/users">User Directory</router-link>
+          <router-link to="/users">Contacts</router-link>
           <router-link to="/groups">Groups</router-link>
-          <router-link to="/chat">Chats</router-link>
+          <router-link to="/chats">Conversations</router-link>
         </nav>
         <button class="btn btn-sm btn-outline-light" @click="logout">Logout</button>
       </header>
@@ -41,6 +41,10 @@ function logout() {
   localStorage.removeItem("photoUrl");
 
   userID.value = "";
-  router.push("/");
+  router.push("/login");
 }
 </script>
+
+<style>
+/* Global styles if any */
+</style>
