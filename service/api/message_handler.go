@@ -19,42 +19,48 @@ type MessageRequest struct {
 
 // MessageResponse defines the response format.
 type MessageResponse struct {
-	MessageID string `json:"messageId"`
+	MessageID      string `json:"messageId"`
+	ConversationID string `json:"conversationId"`
 }
 
-// sendMessage handles sending a message.
+// In your message handler file (e.g., message_handler.go)
+// In your message handler file (e.g., message_handler.go)
 func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Validate the Authorization header.
+	// Validate Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	// Decode the request body.
+	// Decode request body.
 	var req MessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
-
 	// Validate required fields.
 	if req.Content == "" || (!req.IsGroup && req.ReceiverID == "") {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	// Call database function to send the message.
-	messageID, err := rt.db.SendMessage(userID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID)
+	// Call the updated SendMessage function.
+	messageID, conversationID, err := rt.db.SendMessage(userID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID)
 	if err != nil {
 		http.Error(w, "Failed to send message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Return the response.
+	// Return response with both messageId and conversationId.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(MessageResponse{MessageID: messageID}); err != nil {
+	if err := json.NewEncoder(w).Encode(struct {
+		MessageID      string `json:"messageId"`
+		ConversationID string `json:"conversationId"`
+	}{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+	}); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
 }

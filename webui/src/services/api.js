@@ -27,6 +27,8 @@ export function listUsers() {
   return axios.get('/users');
 }
 
+
+
 // Conversations
 export function getMyConversations() {
   return axios.get('/conversation/myconversations');
@@ -40,6 +42,7 @@ export function getConversation(conversationId) {
 export function sendMessage({ receiverId, content, isGroup, groupId }) {
   return axios.post('/messages', { receiverId, content, isGroup, groupId });
 }
+
 
 export function forwardMessage(messageId, targetConversationId) {
   return axios.post(`/messages/${messageId}/forward`, { targetConversationId });

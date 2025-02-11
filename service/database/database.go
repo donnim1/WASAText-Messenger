@@ -21,8 +21,9 @@ type AppDatabase interface {
 
 	GetConversationsByUserID(userID string) ([]Conversation, error)
 	GetConversation(conversationID string) (*Conversation, []Message, error)
+	
 
-	SendMessage(senderID string, receiverID string, content string, isGroup bool, groupID string) (string, error)
+	SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, string, error)
 	ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error)
 	CommentMessage(messageID, userID, reaction string) error
 	UncommentMessage(messageID, userID string) error
@@ -412,28 +413,27 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 }
 
 // SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
-// SendMessage automatically creates a conversation if it doesn't exist and inserts a message.
-func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, error) {
+func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup bool, groupID string) (string, string, error) {
 	// Start a transaction.
 	tx, err := db.db.Begin()
 	if err != nil {
-		return "", fmt.Errorf("transaction start failed: %w", err)
+		return "", "", fmt.Errorf("transaction start failed: %w", err)
 	}
-	// Ensure we commit or rollback the transaction.
+	// Ensure that we rollback the transaction if any error occurs or panic happens.
 	defer func() {
-		// It's a good idea to check the rollback error in real code.
+		// If the transaction has not been committed, rollback.
 		_ = tx.Rollback()
 	}()
 
 	var conversationID string
 
 	if isGroup {
-		// For groups, use the provided groupID.
+		// For group chats, use the provided groupID.
 		conversationID = groupID
-		// Optionally verify that the sender is a member of the group.
+		// (Optionally, you could verify here that the sender is a member of the group.)
 	} else {
 		// For private messages, try to find an existing conversation between the two users.
-		// This query checks that both sender and receiver are members of the same conversation.
+		// This query finds a conversation in which both sender and receiver are members.
 		query := `
 			SELECT c.id
 			FROM conversations c
@@ -444,25 +444,28 @@ func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup b
 			   AND SUM(CASE WHEN gm.user_id = ? THEN 1 ELSE 0 END) > 0
 			LIMIT 1;
 		`
-		err := tx.QueryRow(query, senderID, receiverID).Scan(&conversationID)
+		err = tx.QueryRow(query, senderID, receiverID).Scan(&conversationID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				// Conversation does not exist, so create one.
+				// Conversation does not exist. Create a new one.
 				conversationID, err = GenerateNewID()
 				if err != nil {
-					return "", fmt.Errorf("failed to generate conversation id: %w", err)
+					return "", "", fmt.Errorf("failed to generate conversation id: %w", err)
 				}
+				// Create the conversation record. (Assuming that for private chats you store two participants.)
 				_, err = tx.Exec("INSERT INTO conversations (id, is_group) VALUES (?, 0)", conversationID)
 				if err != nil {
-					return "", fmt.Errorf("failed to create conversation: %w", err)
+					return "", "", fmt.Errorf("failed to create conversation: %w", err)
 				}
-				// Add both participants to the conversation.
-				_, err = tx.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?), (?, ?)", conversationID, senderID, conversationID, receiverID)
+				// Add both the sender and receiver to the conversation (group_members table).
+				_, err = tx.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?), (?, ?)",
+					conversationID, senderID,
+					conversationID, receiverID)
 				if err != nil {
-					return "", fmt.Errorf("failed to add participants: %w", err)
+					return "", "", fmt.Errorf("failed to add participants: %w", err)
 				}
 			} else {
-				return "", fmt.Errorf("error checking for existing conversation: %w", err)
+				return "", "", fmt.Errorf("error checking for existing conversation: %w", err)
 			}
 		}
 	}
@@ -470,23 +473,25 @@ func (db *appdbimpl) SendMessage(senderID, receiverID, content string, isGroup b
 	// Generate a new message ID.
 	messageID, err := GenerateNewID()
 	if err != nil {
-		return "", fmt.Errorf("failed to generate new message id: %w", err)
+		return "", "", fmt.Errorf("failed to generate message id: %w", err)
 	}
 
-	// Insert the message.
+	// Insert the message into the messages table.
 	_, err = tx.Exec("INSERT INTO messages (id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)",
 		messageID, conversationID, senderID, content)
 	if err != nil {
-		return "", fmt.Errorf("failed to insert message: %w", err)
+		return "", "", fmt.Errorf("failed to insert message: %w", err)
 	}
 
 	// Commit the transaction.
-	if err := tx.Commit(); err != nil {
-		return "", fmt.Errorf("transaction commit failed: %w", err)
+	if err = tx.Commit(); err != nil {
+		return "", "", fmt.Errorf("transaction commit failed: %w", err)
 	}
 
-	return messageID, nil
+	// Return both the new message ID and the conversation ID.
+	return messageID, conversationID, nil
 }
+
 
 // ForwardMessage forwards a message to another conversation.
 func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
@@ -615,3 +620,6 @@ func (db *appdbimpl) SetGroupPhoto(groupID, photoUrl string) error {
 	}
 	return nil
 }
+
+
+

@@ -1,3 +1,4 @@
+// src/router/index.js
 import { createRouter, createWebHashHistory } from 'vue-router';
 import MyProfile from '../views/MyProfile.vue';
 import UserList from '../views/UserList.vue';
@@ -10,7 +11,7 @@ const routes = [
   { path: '/users', component: UserList },
   { path: '/groups', component: GroupView },
   { path: '/chats', name: 'MyChatsView', component: MyChatsView },
-  // Make conversationId optional with :conversationId?
+  // conversationId is optional here – if not provided, ChatView will use query parameters.
   { path: '/chat/:conversationId?', name: 'ChatView', component: ChatView },
 ];
 

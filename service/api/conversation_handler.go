@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
+
 	"log"
 	"net/http"
 
 	"github.com/donnim1/WASAText/service/database"
 	"github.com/julienschmidt/httprouter"
 )
+
 
 // getMyConversationsResponse defines the structure of the response after fetching conversations.
 type getMyConversationsResponse struct {

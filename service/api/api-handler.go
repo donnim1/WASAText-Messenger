@@ -17,6 +17,8 @@ func (rt *_router) Handler() http.Handler {
 
 	rt.router.GET("/users", rt.listUsers)
 
+	
+
 	rt.router.GET("/conversation/myconversations", rt.getMyConversations)
 	rt.router.GET("/conversations/:conversationId", rt.getConversation)
 

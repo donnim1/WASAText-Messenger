@@ -16,7 +16,7 @@
     </div>
     <div class="chat-input-container">
       <form @submit.prevent="sendMessageHandler" class="chat-input-form">
-        <input v-model="newMessage" placeholder="Type a message..." required />
+        <input v-model="newMessage" type="text" placeholder="Type your message" />
         <button type="submit">Send</button>
       </form>
     </div>
@@ -35,64 +35,54 @@ export default {
     const route = useRoute();
     const router = useRouter();
 
-    // conversationId is read from route params (it may be empty for a new conversation)
+    // Read conversationId from route parameters and receiverId/name from query parameters.
     const conversationId = ref(route.params.conversationId || "");
-    // We also store the full conversation details when loaded
-    const conversation = ref(null);
+    const receiverId = ref(route.query.receiverId || "");
+    const receiverName = ref(route.query.receiverName || "");
     const messages = ref([]);
     const newMessage = ref("");
     const chatError = ref("");
     const currentUserId = localStorage.getItem("userID") || "";
 
     // Compute the conversation title.
-    // If a conversation exists and its name is nonempty, use that.
-    // Otherwise, if a receiverName query parameter is provided, use that.
-    // Otherwise, fall back to "Private Chat".
     const conversationTitle = computed(() => {
-      if (conversation.value) {
-        if (conversation.value.name && conversation.value.name.trim() !== "") {
-          return conversation.value.name;
-        } else if (route.query.receiverName) {
-          return route.query.receiverName;
-        } else {
-          return "Private Chat";
-        }
+      if (conversationId.value) {
+        // Optionally, you can update this logic to display a conversation name.
+        return receiverName.value || "Conversation";
+      } else if (receiverName.value) {
+        return receiverName.value;
       }
-      return route.query.receiverName || "New Conversation";
+      return "New Conversation";
     });
 
-    // Load conversation details and messages
     async function loadConversationMessages() {
       if (!conversationId.value) return;
       try {
         const response = await getConversation(conversationId.value);
-        conversation.value = response.data.conversation;
         messages.value = response.data.messages;
       } catch (err) {
-        console.error("Error loading conversation:", err);
-        chatError.value = "Failed to load conversation";
+        console.error("Error loading messages:", err);
+        chatError.value = "Failed to load messages";
       }
     }
 
-    // Send a message; if the conversation is new, the backend should return the conversationId.
     async function sendMessageHandler() {
       chatError.value = "";
       if (!newMessage.value.trim()) return;
 
-      // Build the payload.
-      // For private chats: if conversationId is empty, we assume a new conversation will be created.
       const payload = {
-        receiverId: conversationId.value ? "" : (route.query.receiverId || ""),
+        receiverId: receiverId.value, // Always send receiverId for private chats.
         content: newMessage.value,
-        isGroup: false, // adjust this if you support group messaging
-        groupId: ""     // for private chats, leave empty
+        isGroup: false,
+        groupId: ""
       };
 
       try {
         const response = await sendMessage(payload);
-        // If the conversation is new, update conversationId if returned by backend
+        // If a new conversation was auto-created, update conversationId and update the URL.
         if (!conversationId.value && response.data.conversationId) {
           conversationId.value = response.data.conversationId;
+          router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
         }
         messages.value.push({
           id: response.data.messageId,
@@ -136,8 +126,9 @@ export default {
       formatTimestamp,
       currentUserId,
       goBack,
+      conversationId
     };
-  },
+  }
 };
 </script>
 

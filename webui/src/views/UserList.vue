@@ -48,7 +48,7 @@ export default {
     const router = useRouter();
     const currentUserID = localStorage.getItem("userID");
 
-    // Fetch users from the backend and filter out the currently logged-in user.
+    // Fetch users from the backend and filter out the logged-in user.
     async function refreshUsers() {
       error.value = "";
       try {
@@ -72,17 +72,17 @@ export default {
       );
     });
 
+    // When a user is clicked, navigate to ChatView with the receiver's details.
     function openChatWithUser(user) {
-  // Use user.conversationId if it exists; otherwise, pass an empty string.
-  const conversationId = user.conversationId || "";
-  router.push({
-    name: 'ChatView',
-    params: { conversationId },
-    query: { receiverId: user.id, receiverName: user.username }
-  });
-}
-
-
+      // If you have an existing conversation id for this contact, you can include it.
+      // Otherwise, leave it empty so the ChatView will auto-create a conversation when sending a message.
+      const conversationId = user.conversationId || "";
+      router.push({
+        name: "ChatView",
+        params: { conversationId },
+        query: { receiverId: user.id, receiverName: user.username }
+      });
+    }
 
     onMounted(() => {
       refreshUsers();
@@ -109,7 +109,6 @@ export default {
   background-color: #f8f9fa;
 }
 
-/* Search field styling */
 .search-container {
   margin-bottom: 10px;
 }
@@ -121,7 +120,6 @@ export default {
   border-radius: 4px;
 }
 
-/* Refresh button */
 .refresh-button {
   background-color: #27ae60;
   color: white;
@@ -136,7 +134,6 @@ export default {
   background-color: #219150;
 }
 
-/* Contact list styles */
 .contact-list {
   list-style: none;
   padding: 0;

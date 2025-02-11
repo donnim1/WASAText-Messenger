@@ -95,3 +95,11 @@ type _router struct {
 
 	db database.AppDatabase
 }
+
+// Message represents a chat message
+type Message struct {
+	ReceiverId string `json:"receiverId"` // Required for private chats
+	Content    string `json:"content"`
+	IsGroup    bool   `json:"isGroup"`
+	GroupId    string `json:"groupId"` // Only required for group messages
+}
