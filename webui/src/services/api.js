@@ -27,8 +27,6 @@ export function listUsers() {
   return axios.get('/users');
 }
 
-
-
 // Conversations
 export function getMyConversations() {
   return axios.get('/conversation/myconversations');
@@ -66,7 +64,7 @@ export function listUserGroups() {
 }
 
 export function createGroup(data) {
-  return axios.post('/groups/create', data);
+  return axios.post('/groups', data);
 }
 
 export function addUserToGroup(groupId, targetUserId) {
@@ -74,15 +72,23 @@ export function addUserToGroup(groupId, targetUserId) {
 }
 
 export function leaveGroup(groupId) {
+  // Updated endpoint to match backend change.
   return axios.delete(`/groups/${groupId}/leave`);
 }
 
-export function setGroupName(groupId, newName) {
-  return axios.put(`/groups/${groupId}/name`, { newName });
+export function setGroupName(groupId, payload) {
+  // Expects payload { newName: '...' }
+  return axios.put(`/groups/${groupId}/name`, payload);
 }
 
-export function setGroupPhoto(groupId, photoUrl) {
-  return axios.put(`/groups/${groupId}/photo`, { photoUrl });
+export function setGroupPhoto(groupId, payload) {
+  // Expects payload { photoUrl: '...' }
+  return axios.put(`/groups/${groupId}/photo`, payload);
+}
+
+export async function addUserToGroupByUsername(groupId, username) {
+  // This example assumes your backend exposes an endpoint to add by username.
+  return axios.post(`/groups/members/${groupId}/by-username`, { username });
 }
 
 

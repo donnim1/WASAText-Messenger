@@ -17,8 +17,6 @@ func (rt *_router) Handler() http.Handler {
 
 	rt.router.GET("/users", rt.listUsers)
 
-	
-
 	rt.router.GET("/conversation/myconversations", rt.getMyConversations)
 	rt.router.GET("/conversations/:conversationId", rt.getConversation)
 
@@ -30,16 +28,14 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.DELETE("/messages/:messageId/delete", rt.deleteMessage)
 
 	// Group endpoints
-
-	// For example, in your API handler registration:
-	rt.router.POST("/groups/create", rt.createGroup)
-	// Register the GET /groups endpoint.
 	rt.router.GET("/groups", rt.listGroups)
+	rt.router.POST("/groups", rt.createGroup)
 
-	rt.router.POST("/groups/{groupId}/members", rt.addToGroup)
-	rt.router.DELETE("/groups/{groupId}/leave", rt.leaveGroup)
-	rt.router.PUT("/groups/{groupId}/name", rt.setGroupName)
-	rt.router.PUT("/groups/{groupId}/photo", rt.setGroupPhoto)
+	// Then register dynamic routes.
+	rt.router.POST("/groups/:groupId/members", rt.addToGroup)
+	rt.router.PUT("/groups/:groupId/name", rt.setGroupName)
+	rt.router.PUT("/groups/:groupId/photo", rt.setGroupPhoto)
+	rt.router.DELETE("/groups/:groupId/leave", rt.leaveGroup)
 
 	// Special routes
 	rt.router.GET("/liveness", rt.liveness)

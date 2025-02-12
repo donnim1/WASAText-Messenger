@@ -1,4 +1,4 @@
-<!-- src/views/MyChatsView.vue -->
+<!-- filepath: /c:/Users/HP/OneDrive/Desktop/2ND SEM/WASAText/webui/src/views/MyChatsView.vue -->
 <template>
   <div class="chats-view">
     <h1>Your Conversations</h1>
@@ -12,9 +12,17 @@
         @click="openConversation(conv.id)"
       >
         <div class="conversation-info">
-          <!-- For private chats, conv.name should be set by the backend to the partner's name -->
-          <strong>{{ conv.name || 'Private Chat' }}</strong>
-          <span class="timestamp">{{ formatTimestamp(conv.created_at) }}</span>
+          <div class="conversation-header">
+            <strong>{{ conv.name || 'Private Chat' }}</strong>
+            <span class="timestamp">
+              {{ formatTimestamp(conv.lastMessage && conv.lastMessage.sent_at ? conv.lastMessage.sent_at : conv.created_at) }}
+            </span>
+          </div>
+          <div class="conversation-preview">
+            <span class="last-message">
+              {{ conv.lastMessage ? conv.lastMessage.content : 'No messages yet.' }}
+            </span>
+          </div>
         </div>
       </li>
     </ul>
@@ -25,7 +33,7 @@
     <hr />
 
     <!-- New Chat / Search Contacts Section -->
-    <h2>Start a New Chat</h2>
+    <h2>Start a Chat</h2>
     <div class="search-container">
       <input
         v-model="userSearchQuery"
@@ -67,13 +75,15 @@ export default {
     const userSearchQuery = ref("");
     const router = useRouter();
     const currentUserID = localStorage.getItem("userID");
+    const defaultPhoto = "path/to/default-photo.png"; // Update with your default photo URL
 
     // Load existing conversations for the logged-in user.
     async function loadConversations() {
       conversationsError.value = "";
       try {
         const response = await getMyConversations();
-        conversations.value = response.data.conversations;
+        // Ensure that conversations is always an array
+        conversations.value = response.data.conversations || [];
       } catch (err) {
         conversationsError.value = "Failed to load conversations";
         console.error(err);
@@ -94,7 +104,7 @@ export default {
       }
     }
 
-    // Computed property for filtering users by search query.
+    // Computed property to filter users based on search query.
     const filteredUsers = computed(() => {
       if (!userSearchQuery.value) return users.value;
       const query = userSearchQuery.value.toLowerCase();
@@ -108,7 +118,7 @@ export default {
       router.push({ name: "ChatView", params: { conversationId } });
     }
 
-    // Navigate to ChatView with receiver details (for starting a new chat).
+    // Navigate to ChatView with receiver details (to start a new chat).
     function openChatWithUser(user) {
       router.push({
         name: "ChatView",
@@ -117,6 +127,7 @@ export default {
       });
     }
 
+    // Format timestamp for display.
     function formatTimestamp(ts) {
       return new Date(ts).toLocaleTimeString();
     }
@@ -136,6 +147,7 @@ export default {
       openConversation,
       openChatWithUser,
       formatTimestamp,
+      defaultPhoto
     };
   },
 };
@@ -146,74 +158,112 @@ export default {
   padding: 20px;
   max-width: 800px;
   margin: 0 auto;
-  background-color: #f8f9fa;
+  background-color: #f1f3f5;
+  font-family: Arial, sans-serif;
 }
+
 .conversation-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
+
 .conversation-item {
-  padding: 10px;
-  border-bottom: 1px solid #ddd;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 12px;
+  padding: 12px 16px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
+
 .conversation-item:hover {
-  background-color: #e9ecef;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
+
 .conversation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.conversation-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
 }
+
 .timestamp {
   font-size: 0.8rem;
-  color: #666;
+  color: #6c757d;
 }
+
+.conversation-preview {
+  color: #495057;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .empty-message {
   margin-top: 20px;
   text-align: center;
   font-style: italic;
-  color: #666;
+  color: #6c757d;
 }
+
 .search-container {
-  margin: 10px 0;
+  margin: 20px 0;
 }
+
 .search-input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
+  padding: 10px 14px;
+  border: 1px solid #ced4da;
   border-radius: 4px;
+  font-size: 1rem;
 }
+
 .user-search-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
+
 .user-search-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-bottom: 1px solid #ddd;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #dee2e6;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
+
 .user-search-item:hover {
   background-color: #e9ecef;
 }
+
 .user-photo {
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   object-fit: cover;
 }
+
 .user-name {
-  font-size: 1rem;
+  font-size: 1.1rem;
+  color: #212529;
 }
+
 .error {
-  color: red;
+  color: #dc3545;
   margin-top: 10px;
 }
 </style>

@@ -1,16 +1,15 @@
+<!-- filepath: /c:/Users/HP/OneDrive/Desktop/2ND SEM/WASAText/webui/src/views/MyProfile.vue -->
 <template>
   <div class="profile-card">
-    <!-- Sidebar: Displays current user's photo and username -->
+    <!-- Sidebar with profile image and username -->
     <div class="profile-sidebar">
       <img :src="currentPhotoUrl || defaultPhoto" alt="Profile Photo" class="profile-image" />
       <h2 class="profile-username">{{ currentUsername }}</h2>
     </div>
 
-    <!-- Main Section: Forms to update username and upload a new profile photo -->
+    <!-- Main section with forms -->
     <div class="profile-main">
       <h1>Update Profile</h1>
-
-      <!-- Update Username Form -->
       <form @submit.prevent="updateUsernameHandler" class="update-form">
         <label for="username-update">Update Username</label>
         <input
@@ -24,15 +23,11 @@
         />
         <button type="submit">Update Username</button>
       </form>
-
-      <!-- Update Profile Photo Form -->
       <form @submit.prevent="uploadPhotoHandler" class="update-form">
         <label for="photo-upload">Update Profile Photo</label>
-        <!-- Note: Add a name attribute "photo" for proper file field recognition -->
         <input id="photo-upload" name="photo" type="file" accept="image/*" @change="handleFileChange" required />
         <button type="submit">Upload Photo</button>
       </form>
-
       <div v-if="message" class="success-message">{{ message }}</div>
       <div v-if="error" class="error-message">{{ error }}</div>
     </div>
@@ -46,18 +41,15 @@ import { updateUsername, updatePhoto } from "@/services/api.js";
 export default {
   name: "MyProfileView",
   setup() {
-    // Load current profile info from localStorage.
     const currentUsername = ref(localStorage.getItem("username") || "Anonymous");
     const currentPhotoUrl = ref(localStorage.getItem("photoUrl") || "");
     const defaultPhoto = ref("https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg");
 
-    // Update form fields.
     const newUsername = ref("");
     const selectedPhotoFile = ref(null);
     const message = ref("");
     const error = ref("");
 
-    // Update username handler.
     async function updateUsernameHandler() {
       message.value = "";
       error.value = "";
@@ -72,7 +64,6 @@ export default {
       }
     }
 
-    // File change event: store the selected file.
     function handleFileChange(event) {
       const file = event.target.files[0];
       if (file) {
@@ -80,7 +71,6 @@ export default {
       }
     }
 
-    // Upload photo handler: create FormData and call updatePhoto API.
     async function uploadPhotoHandler() {
       message.value = "";
       error.value = "";
@@ -89,14 +79,10 @@ export default {
         return;
       }
       try {
-        // Wrap the file in FormData.
         const formData = new FormData();
         formData.append("photo", selectedPhotoFile.value);
-
         const response = await updatePhoto(formData);
         message.value = "Profile photo updated successfully";
-
-        // Append a timestamp to avoid caching issues.
         const updatedPhotoUrl = response.data.photoUrl + `?t=${Date.now()}`;
         currentPhotoUrl.value = updatedPhotoUrl;
         localStorage.setItem("photoUrl", updatedPhotoUrl);
@@ -129,33 +115,31 @@ export default {
 
 <style scoped>
 .profile-card {
-  max-width: 500px;
+  max-width: 600px;
   margin: 40px auto;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   display: flex;
-  gap: 20px;
+  background-color: #2c2c2c;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  color: #e0e0e0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .profile-sidebar {
-  flex: 0 0 200px;
+  flex: 0 0 220px;
+  background-color: #1a1a1a;
+  padding: 30px;
   text-align: center;
-  padding: 20px;
-  background: #66bb6a;
-  border-radius: 8px;
-  color: white;
 }
 
 .profile-sidebar .profile-image {
-  width: 150px;
-  height: 150px;
+  width: 140px;
+  height: 140px;
   object-fit: cover;
   border-radius: 50%;
-  border: 2px solid white;
-  margin-bottom: 10px;
+  border: 3px solid #4caf50;
+  margin-bottom: 15px;
 }
 
 .profile-username {
@@ -165,55 +149,62 @@ export default {
 
 .profile-main {
   flex: 1;
-  padding: 20px;
-  background: #f9fbe7;
-  border-radius: 8px;
+  padding: 30px;
+  background-color: #333;
+}
+
+.profile-main h1 {
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  color: #4caf50;
 }
 
 .update-form {
-  margin-bottom: 20px;
+  margin-bottom: 25px;
   display: flex;
   flex-direction: column;
 }
 
 .update-form label {
+  margin-bottom: 8px;
   font-weight: bold;
-  margin-bottom: 5px;
+  color: #bbb;
 }
 
 .update-form input {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 12px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background-color: #444;
+  color: #e0e0e0;
+  margin-bottom: 15px;
   font-size: 1rem;
-  margin-bottom: 10px;
 }
 
 .update-form button {
-  padding: 10px;
-  background-color: #43a047;
-  color: white;
+  padding: 12px;
+  background-color: #4caf50;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  border-radius: 6px;
+  color: #fff;
   font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .update-form button:hover {
-  background-color: #388e3c;
+  background-color: #43a047;
 }
 
 .success-message {
-  color: green;
-  font-weight: bold;
+  color: #4caf50;
   text-align: center;
-  margin-top: 10px;
+  margin-top: 15px;
 }
 
 .error-message {
-  color: red;
-  font-weight: bold;
+  color: #f44336;
   text-align: center;
-  margin-top: 10px;
+  margin-top: 15px;
 }
 </style>
