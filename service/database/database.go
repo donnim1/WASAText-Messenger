@@ -19,6 +19,10 @@ type AppDatabase interface {
 	// ListUsers retrieves all users.
 	ListUsers() ([]User, error)
 
+
+	// In the AppDatabase interface:
+	GetChatPartner(conversationID, currentUserID string) (*User, error)
+
 	GetConversationsByUserID(userID string) ([]Conversation, error)
 	GetConversation(conversationID string) (*Conversation, []Message, error)
 	
@@ -621,5 +625,23 @@ func (db *appdbimpl) SetGroupPhoto(groupID, photoUrl string) error {
 	return nil
 }
 
+// GetChatPartner returns the user (other than currentUserID) in the private conversation.
+func (db *appdbimpl) GetChatPartner(conversationID, currentUserID string) (*User, error) {
+	// This query joins the group_members and users tables to find the other user.
+	row := db.db.QueryRow(
+		`SELECT u.id, u.username, u.photo_url
+		 FROM group_members gm
+		 JOIN users u ON gm.user_id = u.id
+		 WHERE gm.group_id = ? AND u.id != ?
+		 LIMIT 1`,
+		conversationID, currentUserID,
+	)
+	var user User
+	err := row.Scan(&user.ID, &user.Username, &user.PhotoURL)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
 
 

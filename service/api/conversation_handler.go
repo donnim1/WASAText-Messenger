@@ -2,14 +2,13 @@ package api
 
 import (
 	"encoding/json"
-
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/donnim1/WASAText/service/database"
 	"github.com/julienschmidt/httprouter"
 )
-
 
 // getMyConversationsResponse defines the structure of the response after fetching conversations.
 type getMyConversationsResponse struct {
@@ -43,11 +42,27 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 	// 3. Convert each database conversation into the API's Conversation type.
 	var apiConversations []Conversation
 	for _, conv := range convs {
+		// For private chats (is_group false), if the conversation name is empty,
+		// try to get the chat partner's username.
+		if conv.Name == "" && !conv.IsGroup {
+			partner, err := rt.db.GetChatPartner(conv.ID, userID)
+			if err == nil && partner != nil {
+				conv.Name = partner.Username
+			}
+		}
+		// Parse and format the created_at timestamp.
+		var formattedCreatedAt string
+		t, err := time.Parse(time.RFC3339, conv.CreatedAt)
+		if err != nil {
+			formattedCreatedAt = conv.CreatedAt
+		} else {
+			formattedCreatedAt = t.Format("2006-01-02 15:04:05")
+		}
 		apiConversations = append(apiConversations, Conversation{
 			ID:        conv.ID,
 			Name:      conv.Name,
 			IsGroup:   conv.IsGroup,
-			CreatedAt: conv.CreatedAt, // Make sure this field exists in your db.Conversation.
+			CreatedAt: formattedCreatedAt,
 		})
 	}
 
@@ -90,12 +105,21 @@ func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps ht
 		return
 	}
 
+	// Parse and format the created_at timestamp.
+	var formattedCreatedAt string
+	t, err := time.Parse(time.RFC3339, conv.CreatedAt)
+	if err != nil {
+		formattedCreatedAt = conv.CreatedAt
+	} else {
+		formattedCreatedAt = t.Format("2006-01-02 15:04:05")
+	}
+
 	// 5. Convert the database conversation into the API's Conversation type.
 	apiConv := Conversation{
 		ID:        conv.ID,
 		Name:      conv.Name,
 		IsGroup:   conv.IsGroup,
-		CreatedAt: conv.CreatedAt,
+		CreatedAt: formattedCreatedAt,
 	}
 
 	// 6. Build the response containing conversation details and messages.

@@ -1,4 +1,3 @@
-<!-- src/views/MyChatsView.vue -->
 <template>
   <div class="chats-view">
     <h1>Your Conversations</h1>
@@ -11,11 +10,15 @@
         @click="openConversation(conv.id)"
       >
         <div class="conversation-info">
-          <strong>{{ conv.name || 'Private Chat' }}</strong>
+          <!-- If conv.name is empty, show "Private Chat" (or you can enhance this to display partner's name) -->
+          <strong>{{ conv.name || "Private Chat" }}</strong>
           <span class="timestamp">{{ formatTimestamp(conv.created_at) }}</span>
         </div>
       </li>
     </ul>
+    <div v-if="conversations.length === 0" class="empty-message">
+      You have no conversations yet.
+    </div>
   </div>
 </template>
 
@@ -71,29 +74,42 @@ export default {
   margin: 0 auto;
   background-color: #f8f9fa;
 }
+
 .conversation-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
+
 .conversation-item {
   padding: 10px;
   border-bottom: 1px solid #ddd;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
+
 .conversation-item:hover {
   background-color: #e9ecef;
 }
+
 .conversation-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .timestamp {
   font-size: 0.8rem;
   color: #666;
 }
+
+.empty-message {
+  margin-top: 20px;
+  text-align: center;
+  font-style: italic;
+  color: #666;
+}
+
 .error {
   color: red;
   margin-top: 10px;

@@ -7,16 +7,16 @@
     <div class="chat-messages">
       <div
         v-for="msg in messages"
-        :key="msg.id"
-        :class="['chat-message', { sent: msg.sender_id === currentUserId, received: msg.sender_id !== currentUserId }]"
+        :key="msg.ID"
+        :class="['chat-message', { sent: msg.SenderID === currentUserId, received: msg.SenderID !== currentUserId }]"
       >
-        <p class="message-content">{{ msg.content }}</p>
-        <span class="message-timestamp">{{ formatTimestamp(msg.sent_at) }}</span>
+        <p class="message-content">{{ msg.Content }}</p>
+        <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
       </div>
     </div>
     <div class="chat-input-container">
       <form @submit.prevent="sendMessageHandler" class="chat-input-form">
-        <input v-model="newMessage" type="text" placeholder="Type your message" />
+        <input v-model="newMessage" placeholder="Type a message..." required />
         <button type="submit">Send</button>
       </form>
     </div>
@@ -35,24 +35,22 @@ export default {
     const route = useRoute();
     const router = useRouter();
 
-    // Read conversationId from route parameters and receiverId/name from query parameters.
+    // conversationId is read from route params if available.
     const conversationId = ref(route.params.conversationId || "");
+    // Also, if coming from the user directory, receiverId and receiverName can be in the query.
     const receiverId = ref(route.query.receiverId || "");
-    const receiverName = ref(route.query.receiverName || "");
     const messages = ref([]);
     const newMessage = ref("");
     const chatError = ref("");
     const currentUserId = localStorage.getItem("userID") || "";
 
-    // Compute the conversation title.
+    // Compute the conversation title:
+    // If a receiverName is provided (for a new conversation) use that, otherwise default to "Conversation".
     const conversationTitle = computed(() => {
-      if (conversationId.value) {
-        // Optionally, you can update this logic to display a conversation name.
-        return receiverName.value || "Conversation";
-      } else if (receiverName.value) {
-        return receiverName.value;
+      if (route.query.receiverName && !conversationId.value) {
+        return route.query.receiverName;
       }
-      return "New Conversation";
+      return "Conversation";
     });
 
     async function loadConversationMessages() {
@@ -69,26 +67,24 @@ export default {
     async function sendMessageHandler() {
       chatError.value = "";
       if (!newMessage.value.trim()) return;
-
-      const payload = {
-        receiverId: receiverId.value, // Always send receiverId for private chats.
-        content: newMessage.value,
-        isGroup: false,
-        groupId: ""
-      };
-
       try {
+        const payload = {
+          receiverId: conversationId.value ? "" : receiverId.value, // If conversation exists, backend already knows the receiver.
+          content: newMessage.value,
+          isGroup: false,
+          groupId: ""
+        };
         const response = await sendMessage(payload);
-        // If a new conversation was auto-created, update conversationId and update the URL.
+        // If a new conversation was created, update conversationId and update the route.
         if (!conversationId.value && response.data.conversationId) {
           conversationId.value = response.data.conversationId;
           router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
         }
         messages.value.push({
-          id: response.data.messageId,
-          sender_id: currentUserId,
-          content: newMessage.value,
-          sent_at: new Date().toISOString()
+          ID: response.data.messageId,
+          SenderID: currentUserId,
+          Content: newMessage.value,
+          SentAt: new Date().toISOString()
         });
         newMessage.value = "";
       } catch (err) {

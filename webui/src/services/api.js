@@ -39,8 +39,9 @@ export function getConversation(conversationId) {
 }
 
 // Messaging Endpoints
-export function sendMessage({ receiverId, content, isGroup, groupId }) {
-  return axios.post('/messages', { receiverId, content, isGroup, groupId });
+// Replace the old sendMessage function with:
+export function sendMessage(payload) {
+  return axios.post('/messages', payload);
 }
 
 
