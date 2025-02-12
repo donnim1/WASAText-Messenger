@@ -40,10 +40,10 @@ export function getConversation(conversationId) {
 
 // Messaging Endpoints
 // Replace the old sendMessage function with:
-export function sendMessage(payload) {
-  return axios.post('/messages', payload);
+export function sendMessage({ receiverId, content, isGroup, groupId }) {
+  // The backend expects a payload with "receiverId", "content", "isGroup" and "groupId"
+  return axios.post('/messages', { receiverId, content, isGroup, groupId });
 }
-
 
 export function forwardMessage(messageId, targetConversationId) {
   return axios.post(`/messages/${messageId}/forward`, { targetConversationId });

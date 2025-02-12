@@ -2,6 +2,7 @@
   <div class="chat-view">
     <div class="chat-header">
       <button class="back-button" @click="goBack">←</button>
+      <!-- Show the partner's name if provided; otherwise, default to "Conversation" -->
       <h2>{{ conversationTitle }}</h2>
     </div>
     <div class="chat-messages">
@@ -35,24 +36,25 @@ export default {
     const route = useRoute();
     const router = useRouter();
 
-    // conversationId is read from route params if available.
+    // Read conversationId from route parameters (if present)
     const conversationId = ref(route.params.conversationId || "");
-    // Also, if coming from the user directory, receiverId and receiverName can be in the query.
+    // Get the receiver info from query parameters; this is used to send a message.
     const receiverId = ref(route.query.receiverId || "");
+    const receiverName = ref(route.query.receiverName || "");
     const messages = ref([]);
     const newMessage = ref("");
     const chatError = ref("");
     const currentUserId = localStorage.getItem("userID") || "";
 
-    // Compute the conversation title:
-    // If a receiverName is provided (for a new conversation) use that, otherwise default to "Conversation".
+    // Compute conversation title. If conversationId is not present, use the receiverName.
     const conversationTitle = computed(() => {
-      if (route.query.receiverName && !conversationId.value) {
-        return route.query.receiverName;
+      if (!conversationId.value && receiverName.value) {
+        return receiverName.value;
       }
       return "Conversation";
     });
 
+    // Load messages if a conversation already exists.
     async function loadConversationMessages() {
       if (!conversationId.value) return;
       try {
@@ -64,18 +66,19 @@ export default {
       }
     }
 
+    // Send a message. Always include the receiverId (from the query) in the payload.
     async function sendMessageHandler() {
       chatError.value = "";
       if (!newMessage.value.trim()) return;
       try {
         const payload = {
-          receiverId: conversationId.value ? "" : receiverId.value, // If conversation exists, backend already knows the receiver.
+          receiverId: receiverId.value, // Always provide the receiver's id
           content: newMessage.value,
           isGroup: false,
           groupId: ""
         };
         const response = await sendMessage(payload);
-        // If a new conversation was created, update conversationId and update the route.
+        // If a new conversation was created (backend returns conversationId), update conversationId and the route.
         if (!conversationId.value && response.data.conversationId) {
           conversationId.value = response.data.conversationId;
           router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
@@ -102,11 +105,13 @@ export default {
     }
 
     onMounted(() => {
+      // If conversationId is missing (i.e. a new chat), there are no messages to load.
       if (conversationId.value) {
         loadConversationMessages();
       }
     });
 
+    // Reload messages whenever conversationId changes.
     watch(conversationId, (newVal) => {
       if (newVal) {
         loadConversationMessages();
@@ -122,9 +127,9 @@ export default {
       formatTimestamp,
       currentUserId,
       goBack,
-      conversationId
+      conversationId,
     };
-  }
+  },
 };
 </script>
 

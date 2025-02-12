@@ -48,7 +48,6 @@ export default {
     const router = useRouter();
     const currentUserID = localStorage.getItem("userID");
 
-    // Fetch users from the backend and filter out the logged-in user.
     async function refreshUsers() {
       error.value = "";
       try {
@@ -63,7 +62,7 @@ export default {
       }
     }
 
-    // Computed property for filtering based on the search query.
+    // Filter contacts based on the search query.
     const filteredUsers = computed(() => {
       if (!searchQuery.value) return users.value;
       const query = searchQuery.value.toLowerCase();
@@ -72,16 +71,21 @@ export default {
       );
     });
 
-    // When a user is clicked, navigate to ChatView with the receiver's details.
+    // If a user already has a conversationId, use that; otherwise, use receiver info.
     function openChatWithUser(user) {
-      // If you have an existing conversation id for this contact, you can include it.
-      // Otherwise, leave it empty so the ChatView will auto-create a conversation when sending a message.
-      const conversationId = user.conversationId || "";
-      router.push({
-        name: "ChatView",
-        params: { conversationId },
-        query: { receiverId: user.id, receiverName: user.username }
-      });
+      if (user.conversationId) {
+        // Navigate directly with conversationId in params.
+        router.push({
+          name: "ChatView",
+          params: { conversationId: user.conversationId }
+        });
+      } else {
+        // No conversation exists, so pass receiver details in query.
+        router.push({
+          name: "ChatView",
+          query: { receiverId: user.id, receiverName: user.username }
+        });
+      }
     }
 
     onMounted(() => {

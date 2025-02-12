@@ -10,11 +10,11 @@ import (
 
 // MessageRequest defines the request format for sending a message.
 type MessageRequest struct {
-	// SenderID is not needed because we derive it from the token.
-	ReceiverID string `json:"receiverId"` // For private chats; leave empty for group messages.
-	Content    string `json:"content"`    // The message text.
-	IsGroup    bool   `json:"isGroup"`    // True for group messages.
-	GroupID    string `json:"groupId"`    // Group ID if sending in a group.
+	ConversationID string `json:"conversationId"` // Add this field
+	ReceiverID     string `json:"receiverId"`     // Ensure uppercase "ID"
+	Content        string `json:"content"`
+	IsGroup        bool   `json:"isGroup"`
+	GroupID        string `json:"groupId"` // Ensure uppercase "ID"
 }
 
 // MessageResponse defines the response format.
@@ -38,14 +38,16 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprou
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
+
 	// Validate required fields.
-	if req.Content == "" || (!req.IsGroup && req.ReceiverID == "") {
+	if req.Content == "" ||
+		(!req.IsGroup && req.ConversationID == "" && req.ReceiverID == "") {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
 	// Call the updated SendMessage function.
-	messageID, conversationID, err := rt.db.SendMessage(userID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID)
+	messageID, conversationID, err := rt.db.SendMessage(userID, req.ConversationID, req.ReceiverID, req.IsGroup, req.Content, req.GroupID)
 	if err != nil {
 		http.Error(w, "Failed to send message: "+err.Error(), http.StatusInternalServerError)
 		return
