@@ -1,8 +1,8 @@
+<!-- src/views/ChatView.vue -->
 <template>
   <div class="chat-view">
     <div class="chat-header">
       <button class="back-button" @click="goBack">←</button>
-      <!-- Show the partner's name if provided; otherwise, default to "Conversation" -->
       <h2>{{ conversationTitle }}</h2>
     </div>
     <div class="chat-messages">
@@ -36,9 +36,8 @@ export default {
     const route = useRoute();
     const router = useRouter();
 
-    // Read conversationId from route parameters (if present)
+    // Read conversationId from route parameters (may be empty) and receiver details from query.
     const conversationId = ref(route.params.conversationId || "");
-    // Get the receiver info from query parameters; this is used to send a message.
     const receiverId = ref(route.query.receiverId || "");
     const receiverName = ref(route.query.receiverName || "");
     const messages = ref([]);
@@ -46,7 +45,7 @@ export default {
     const chatError = ref("");
     const currentUserId = localStorage.getItem("userID") || "";
 
-    // Compute conversation title. If conversationId is not present, use the receiverName.
+    // Compute conversation title: if conversationId is provided, use backend name; otherwise, use receiverName.
     const conversationTitle = computed(() => {
       if (!conversationId.value && receiverName.value) {
         return receiverName.value;
@@ -54,7 +53,7 @@ export default {
       return "Conversation";
     });
 
-    // Load messages if a conversation already exists.
+    // Load messages if conversationId exists.
     async function loadConversationMessages() {
       if (!conversationId.value) return;
       try {
@@ -66,23 +65,25 @@ export default {
       }
     }
 
-    // Send a message. Always include the receiverId (from the query) in the payload.
+    // Send a message.
     async function sendMessageHandler() {
       chatError.value = "";
       if (!newMessage.value.trim()) return;
+      const payload = {
+        conversationId: conversationId.value, // may be an empty string for new conversations
+        receiverId: receiverId.value,           // required when conversationId is empty
+        content: newMessage.value,
+        isGroup: false,
+        groupId: ""
+      };
       try {
-        const payload = {
-          receiverId: receiverId.value, // Always provide the receiver's id
-          content: newMessage.value,
-          isGroup: false,
-          groupId: ""
-        };
         const response = await sendMessage(payload);
-        // If a new conversation was created (backend returns conversationId), update conversationId and the route.
+        // If a new conversation was auto-created, update conversationId and update the URL.
         if (!conversationId.value && response.data.conversationId) {
           conversationId.value = response.data.conversationId;
           router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
         }
+        // Append the new message to the list.
         messages.value.push({
           ID: response.data.messageId,
           SenderID: currentUserId,
@@ -105,13 +106,11 @@ export default {
     }
 
     onMounted(() => {
-      // If conversationId is missing (i.e. a new chat), there are no messages to load.
       if (conversationId.value) {
         loadConversationMessages();
       }
     });
 
-    // Reload messages whenever conversationId changes.
     watch(conversationId, (newVal) => {
       if (newVal) {
         loadConversationMessages();
@@ -127,7 +126,7 @@ export default {
       formatTimestamp,
       currentUserId,
       goBack,
-      conversationId,
+      conversationId
     };
   },
 };
@@ -140,7 +139,6 @@ export default {
   height: 100vh;
   background-color: #ece5dd;
 }
-
 .chat-header {
   display: flex;
   align-items: center;
@@ -148,7 +146,6 @@ export default {
   background-color: #075e54;
   color: white;
 }
-
 .back-button {
   background: transparent;
   border: none;
@@ -157,14 +154,12 @@ export default {
   margin-right: 10px;
   cursor: pointer;
 }
-
 .chat-messages {
   flex: 1;
   padding: 15px;
   overflow-y: auto;
   background-color: #ffffff;
 }
-
 .chat-message {
   margin-bottom: 10px;
   padding: 8px 12px;
@@ -172,22 +167,18 @@ export default {
   max-width: 70%;
   word-wrap: break-word;
 }
-
 .chat-message.sent {
   align-self: flex-end;
   background-color: #dcf8c6;
 }
-
 .chat-message.received {
   align-self: flex-start;
   background-color: #ffffff;
   border: 1px solid #ccc;
 }
-
 .message-content {
   margin: 0;
 }
-
 .message-timestamp {
   display: block;
   font-size: 0.75rem;
@@ -195,25 +186,21 @@ export default {
   margin-top: 4px;
   text-align: right;
 }
-
 .chat-input-container {
   padding: 10px;
   background-color: #f0f0f0;
   border-top: 1px solid #ccc;
 }
-
 .chat-input-form {
   display: flex;
   gap: 10px;
 }
-
 .chat-input-form input {
   flex: 1;
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 4px;
 }
-
 .chat-input-form button {
   margin-left: 10px;
   padding: 10px 20px;
@@ -223,7 +210,6 @@ export default {
   border-radius: 4px;
   cursor: pointer;
 }
-
 .chat-error {
   color: red;
   text-align: center;

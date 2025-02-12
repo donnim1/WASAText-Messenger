@@ -418,61 +418,83 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 // SendMessage inserts a new message and returns the generated messageID and conversationID.
 // If conversationID is empty, creates a new conversation for the users.
 func (db *appdbimpl) SendMessage(userID, receiverID, content string, isGroup bool, groupID, conversationID string) (string, string, error) {
-	// If this is a private message and conversationID is empty, create a new conversation.
-	if !isGroup && conversationID == "" {
-		newConvID, err := db.createConversation(userID, receiverID)
-		if err != nil {
-			return "", "", err
+	// For private messages, check if a conversation already exists.
+	if !isGroup {
+		if conversationID == "" {
+			// Attempt to fetch an existing conversation between userID and receiverID.
+			existingConv, err := db.GetPrivateConversation(userID, receiverID)
+			if err != nil {
+				return "", "", fmt.Errorf("error checking for existing conversation: %w", err)
+			}
+			if existingConv != nil {
+				conversationID = existingConv.ID
+			} else {
+				// No conversation exists, create a new one.
+				conversationID, err = db.createConversation(userID, receiverID)
+				if err != nil {
+					return "", "", fmt.Errorf("failed to create conversation: %w", err)
+				}
+			}
 		}
-		conversationID = newConvID
 	}
 
-	// For group messages, you might already have groupID. (Handle accordingly)
+	// Generate a new unique message ID.
+	newMessageID, err := GenerateNewID()
+	if err != nil {
+		return "", "", fmt.Errorf("GenerateNewID error: %w", err)
+	}
 
-	// Simulate creating a new message record.
-	newMessageID := generateNewMessageID() // Assume this function generates a unique message ID.
 	currentTime := time.Now().UTC().Format(time.RFC3339)
 
-	// Insert the new message into your messages table.
-	// (Replace the following with your actual DB insert query)
-	fmt.Printf("Inserting message: ID=%s, ConversationID=%s, UserID=%s, Content=%s, SentAt=%s\n",
-		newMessageID, conversationID, userID, content, currentTime)
+	// Insert the new message into the messages table.
+	query := `INSERT INTO messages (id, conversation_id, sender_id, content, sent_at) VALUES (?, ?, ?, ?, ?)`
+	result, err := db.db.Exec(query, newMessageID, conversationID, userID, content, currentTime)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to insert message, query error: %w", err)
+	}
 
-	// If the insert fails, return an error.
-	// e.g., err := db.insertMessage(query, params...)
-	// if err != nil {
-	//     return "", "", err
-	// }
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to check affected rows: %w", err)
+	}
+	if affected == 0 {
+		return "", "", fmt.Errorf("no rows affected")
+	}
 
-	// Return new messageID and the conversationID.
 	return newMessageID, conversationID, nil
 }
 
 // createConversation creates a new conversation between two users and returns the new conversation ID.
 func (db *appdbimpl) createConversation(userID, receiverID string) (string, error) {
-	newConversationID := generateNewConversationID() // Assume this function generates a unique conversation ID.
-	// Insert a new conversation record into your conversations table.
-	// (Replace the following with your actual DB insert query)
-	fmt.Printf("Creating new conversation: ID=%s between user %s and receiver %s\n",
-		newConversationID, userID, receiverID)
-	// If the insert fails, return an error.
-	// e.g., err := db.insertConversation(query, params...)
-	// if err != nil {
-	//     return "", err
-	// }
+	// Generate a unique conversation ID.
+	newConversationID, err := GenerateNewID()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate conversation ID: %w", err)
+	}
+
+	// Insert a new conversation record into the conversations table.
+	// For a private conversation, you might leave the name blank.
+	query := `INSERT INTO conversations (id, name, is_group, created_at) VALUES (?, ?, 0, ?)`
+	currentTime := time.Now().UTC().Format(time.RFC3339)
+	_, err = db.db.Exec(query, newConversationID, "", currentTime)
+	if err != nil {
+		return "", fmt.Errorf("failed to insert conversation: %w", err)
+	}
+
+	// Add both users as members of this private conversation.
+	_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", newConversationID, userID)
+	if err != nil {
+		return "", fmt.Errorf("failed to add creator to conversation: %w", err)
+	}
+	_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", newConversationID, receiverID)
+	if err != nil {
+		return "", fmt.Errorf("failed to add receiver to conversation: %w", err)
+	}
+
 	return newConversationID, nil
 }
 
-// Dummy functions to simulate ID generation.
-func generateNewMessageID() string {
-	// TODO: Implement a proper unique ID generator.
-	return "msg123456789"
-}
-
-func generateNewConversationID() string {
-	// TODO: Implement a proper unique ID generator.
-	return "conv123456789"
-}
+// (Duplicate GenerateNewID function removed)
 
 // ForwardMessage forwards a message to another conversation.
 func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
@@ -619,4 +641,30 @@ func (db *appdbimpl) GetChatPartner(conversationID, currentUserID string) (*User
 		return nil, err
 	}
 	return &user, nil
+}
+
+// GetPrivateConversation looks for an existing private conversation between two users.
+func (db *appdbimpl) GetPrivateConversation(userID, receiverID string) (*Conversation, error) {
+	// Adjust this SQL according to your schema and how you store private conversations.
+	query := `
+    SELECT c.id, c.name, c.is_group, c.created_at 
+    FROM conversations c
+    JOIN group_members gm ON c.id = gm.group_id
+    WHERE c.is_group = 0 
+      AND gm.user_id = ?
+      AND c.id IN (
+          SELECT group_id FROM group_members WHERE user_id = ?
+      )
+    LIMIT 1
+    `
+	row := db.db.QueryRow(query, userID, receiverID)
+	var conv Conversation
+	if err := row.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt); err != nil {
+		// If the error is due to no rows, return nil without an error.
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &conv, nil
 }

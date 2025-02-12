@@ -47,7 +47,7 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 
 	// Call the updated SendMessage function.
-	messageID, conversationID, err := rt.db.SendMessage(userID, req.ConversationID, req.ReceiverID, req.IsGroup, req.Content, req.GroupID)
+	messageID, conversationID, err := rt.db.SendMessage(userID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID, req.ConversationID)
 	if err != nil {
 		http.Error(w, "Failed to send message: "+err.Error(), http.StatusInternalServerError)
 		return
