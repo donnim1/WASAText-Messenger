@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/donnim1/WASAText/service/database"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -33,7 +34,7 @@ func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprout
 	// Convert []database.Conversation to []Conversation.
 	var convs []Conversation
 	for _, group := range groups {
-		convs = append(convs, Conversation(group))
+		convs = append(convs, convertDBConversationToConversation(group))
 	}
 
 	// Return the groups as JSON.
@@ -203,6 +204,16 @@ type setGroupPhotoRequest struct {
 }
 
 // setGroupPhoto handles PUT /groups/photo to update a group's photo.
+// convertDBConversationToConversation converts a database.Conversation to an API Conversation.
+// Adjust the fields below as needed to match both types.
+func convertDBConversationToConversation(dbConv database.Conversation) Conversation {
+	return Conversation{
+		ID:   dbConv.ID,
+		Name: dbConv.Name,
+		// add other fields as needed
+	}
+}
+
 func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Validate the Authorization header.
 	_, err := rt.getAuthenticatedUserID(r)

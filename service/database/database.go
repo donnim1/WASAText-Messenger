@@ -22,7 +22,7 @@ type AppDatabase interface {
 
 	// In the AppDatabase interface:
 	GetChatPartner(conversationID, currentUserID string) (*User, error)
-
+	GetConversationBetween(userID1, userID2 string) (*Conversation, error)
 	GetConversationsByUserID(userID string) ([]Conversation, error)
 	GetConversation(conversationID string) (*Conversation, []Message, error)
 
@@ -62,7 +62,8 @@ type Conversation struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	IsGroup   bool   `json:"is_group"`
-	CreatedAt string `json:"created_at"` // Timestamp of when the conversation was created
+	CreatedAt string `json:"created_at"`
+	Messages []Message `json:"messages"` // Timestamp of when the conversation was created
 }
 
 type Message struct {
@@ -72,6 +73,55 @@ type Message struct {
 	Content        string
 	ReplyTo        sql.NullString // If replies are optional
 	SentAt         string         // using string for simplicity; you may use time.Time
+}
+
+
+// GetConversationBetween looks for an existing conversation that includes both userID1 and userID2.
+func (db *appdbimpl) GetConversationBetween(userID1, userID2 string) (*Conversation, error) {
+    // Example SQL: Adjust based on your conversation/members table structure.
+    query := `
+        SELECT c.id
+        FROM conversations c
+        INNER JOIN conversation_members cm1 ON c.id = cm1.conversation_id
+        INNER JOIN conversation_members cm2 ON c.id = cm2.conversation_id
+        WHERE cm1.user_id = ? AND cm2.user_id = ?
+        LIMIT 1
+    `
+    var convID string
+    err := db.db.QueryRow(query, userID1, userID2).Scan(&convID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, errors.New("conversation not found")
+        }
+        return nil, err
+    }
+
+    // Retrieve messages for the conversation.
+    msgQuery := `
+        SELECT id, sender_id, content, sent_at 
+        FROM messages 
+        WHERE conversation_id = ?
+        ORDER BY sent_at ASC
+    `
+    rows, err := db.db.Query(msgQuery, convID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var messages []Message
+    for rows.Next() {
+        var msg Message
+        if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.Content, &msg.SentAt); err != nil {
+            return nil, err
+        }
+        messages = append(messages, msg)
+    }
+
+    return &Conversation{
+        ID:       convID,
+        Messages: messages,
+    }, nil
 }
 
 // GetGroupsByUserID retrieves all group conversations associated with a user.

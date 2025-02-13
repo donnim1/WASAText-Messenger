@@ -10,6 +10,44 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+
+// ConversationResponse is the payload returned by GetConversationByReceiver.
+type ConversationResponse struct {
+    ConversationID string              `json:"conversationId"`
+    Messages       []database.Message  `json:"messages"`
+}
+
+// GetConversationByReceiver handles requests to fetch a conversation by receiverID.
+// It expects the current user's ID to be provided via a header (e.g. "X-User-Id").
+// Route: GET /conversations/for/:receiverId
+func (rt *_router) GetConversationByReceiver(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    receiverId := ps.ByName("receiverId")
+    currentUserId := r.Header.Get("X-User-Id")
+    if currentUserId == "" {
+        http.Error(w, "Missing current user ID", http.StatusBadRequest)
+        return
+    }
+
+    // Use a database helper to fetch a conversation between the two users.
+    conv, err := rt.db.GetConversationBetween(currentUserId, receiverId)
+    if err != nil {
+        http.Error(w, "Conversation not found", http.StatusNotFound)
+        return
+    }
+
+    res := ConversationResponse{
+        ConversationID: conv.ID,
+        Messages:       conv.Messages,
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(res); err != nil {
+        log.Println("Error encoding conversation response:", err)
+        http.Error(w, "Internal server error", http.StatusInternalServerError)
+        return
+    }
+}
+
 // getMyConversationsResponse defines the structure of the response after fetching conversations.
 type getMyConversationsResponse struct {
 	Conversations []Conversation `json:"conversations"`
