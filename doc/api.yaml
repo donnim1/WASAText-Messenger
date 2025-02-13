@@ -440,7 +440,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /groups/create:
+  /groups:
     post:
       tags:
         - groups

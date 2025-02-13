@@ -36,6 +36,11 @@ export function getConversation(conversationId) {
   return axios.get(`/conversations/${conversationId}`);
 }
 
+export function getConversationByReceiver(receiverId) {
+  // Assumes the backend endpoint GET /conversations/for/:receiverId is implemented.
+  return axios.get(`/conversationsfor/${receiverId}`);
+}
+
 // Messaging Endpoints
 export function sendMessage({ conversationId, receiverId, content, isGroup, groupId }) {
   // Now include conversationId (which may be empty if not yet created)

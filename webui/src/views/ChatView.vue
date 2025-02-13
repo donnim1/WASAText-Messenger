@@ -1,34 +1,64 @@
-<!-- src/views/ChatView.vue -->
 <template>
   <div class="chat-view">
+    <!-- Chat Header -->
     <div class="chat-header">
-      <button class="back-button" @click="goBack">←</button>
-      <h2>{{ conversationTitle }}</h2>
+      <div class="header-content">
+        <button class="back-button" @click="goBack">
+          <span class="back-icon">←</span>
+        </button>
+        <div class="chat-info">
+          <h2>{{ conversationTitle }}</h2>
+          <span class="status">Online</span>
+        </div>
+      </div>
     </div>
-    <div class="chat-messages">
+
+    <!-- Messages Container -->
+    <div class="chat-messages" ref="messagesContainer">
+      <div v-if="messages.length === 0" class="empty-chat">
+        <div class="empty-icon">💭</div>
+        <h3>No Messages Yet</h3>
+        <p>Start the conversation by sending a message</p>
+      </div>
+      
       <div
         v-for="msg in messages"
         :key="msg.ID"
-        :class="['chat-message', { sent: msg.SenderID === currentUserId, received: msg.SenderID !== currentUserId }]"
+        :class="['message-wrapper', { 'sent': msg.SenderID === currentUserId }]"
       >
-        <p class="message-content">{{ msg.Content }}</p>
-        <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
+        <div class="message-bubble">
+          <p class="message-content">{{ msg.Content }}</p>
+          <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
+        </div>
       </div>
     </div>
+
+    <!-- Input Area -->
     <div class="chat-input-container">
       <form @submit.prevent="sendMessageHandler" class="chat-input-form">
-        <input v-model="newMessage" placeholder="Type a message..." required />
-        <button type="submit">Send</button>
+        <input
+          v-model="newMessage"
+          placeholder="Type a message..."
+          required
+          class="message-input"
+        />
+        <button type="submit" class="send-button">
+          Send
+        </button>
       </form>
     </div>
-    <div v-if="chatError" class="chat-error">{{ chatError }}</div>
+
+    <!-- Error Message -->
+    <div v-if="chatError" class="chat-error">
+      {{ chatError }}
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch, computed } from "vue";
-import { getConversation, sendMessage } from "@/services/api.js";
+import { ref, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { getConversation, sendMessage, getConversationByReceiver } from "@/services/api.js";
 
 export default {
   name: "ChatView",
@@ -36,7 +66,7 @@ export default {
     const route = useRoute();
     const router = useRouter();
 
-    // Read conversationId from route parameters (may be empty) and receiver details from query.
+    // Get conversation and user details
     const conversationId = ref(route.params.conversationId || "");
     const receiverId = ref(route.query.receiverId || "");
     const receiverName = ref(route.query.receiverName || "");
@@ -45,54 +75,47 @@ export default {
     const chatError = ref("");
     const currentUserId = localStorage.getItem("userID") || "";
 
-    // Compute conversation title: if conversationId is provided, use backend name; otherwise, use receiverName.
-    const conversationTitle = computed(() => {
-      if (!conversationId.value && receiverName.value) {
-        return receiverName.value;
-      }
-      return "Conversation";
-    });
+    // Default title when no conversation is available
+    const conversationTitle = ref(receiverName.value || "Chat");
 
-    // Load messages if conversationId exists.
+    // Function to load messages
     async function loadConversationMessages() {
-      if (!conversationId.value) return;
       try {
-        const response = await getConversation(conversationId.value);
-        messages.value = response.data.messages;
+        if (conversationId.value) {
+          const response = await getConversation(conversationId.value);
+          messages.value = response.data.messages || [];
+        } else if (receiverId.value) {
+          // Try to load conversation by receiver if conversationId is missing
+          const response = await getConversationByReceiver(receiverId.value);
+          if (response.data.conversationId) {
+            conversationId.value = response.data.conversationId;
+            messages.value = response.data.messages || [];
+            // Update URL to include conversation ID
+            router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
+          }
+        }
       } catch (err) {
         console.error("Error loading messages:", err);
         chatError.value = "Failed to load messages";
       }
     }
 
-    // Send a message.
     async function sendMessageHandler() {
-      chatError.value = "";
       if (!newMessage.value.trim()) return;
-      const payload = {
-        conversationId: conversationId.value, // may be an empty string for new conversations
-        receiverId: receiverId.value,           // required when conversationId is empty
-        content: newMessage.value,
-        isGroup: false,
-        groupId: ""
-      };
       try {
-        const response = await sendMessage(payload);
-        // If a new conversation was auto-created, update conversationId and update the URL.
-        if (!conversationId.value && response.data.conversationId) {
+        const response = await sendMessage({
+          conversationId: conversationId.value,
+          receiverId: receiverId.value,
+          content: newMessage.value
+        });
+        if (response.data.conversationId && !conversationId.value) {
           conversationId.value = response.data.conversationId;
           router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
         }
-        // Append the new message to the list.
-        messages.value.push({
-          ID: response.data.messageId,
-          SenderID: currentUserId,
-          Content: newMessage.value,
-          SentAt: new Date().toISOString()
-        });
         newMessage.value = "";
+        loadConversationMessages();
       } catch (err) {
-        console.error("Send message error:", err);
+        console.error("Error sending message:", err);
         chatError.value = "Failed to send message";
       }
     }
@@ -106,16 +129,18 @@ export default {
     }
 
     onMounted(() => {
-      if (conversationId.value) {
-        loadConversationMessages();
-      }
+      loadConversationMessages();
     });
 
-    watch(conversationId, (newVal) => {
-      if (newVal) {
-        loadConversationMessages();
+    watch(
+      () => route.params.conversationId,
+      (newId) => {
+        if (newId) {
+          conversationId.value = newId;
+          loadConversationMessages();
+        }
       }
-    });
+    );
 
     return {
       conversationTitle,
@@ -124,11 +149,10 @@ export default {
       chatError,
       sendMessageHandler,
       formatTimestamp,
-      currentUserId,
       goBack,
-      conversationId
+      currentUserId
     };
-  },
+  }
 };
 </script>
 
@@ -137,82 +161,189 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #ece5dd;
+  background-color: #f8f9fa;
 }
+
 .chat-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e9ecef;
+  padding: 15px 20px;
+}
+
+.header-content {
   display: flex;
   align-items: center;
-  padding: 10px;
-  background-color: #075e54;
-  color: white;
+  gap: 15px;
 }
+
 .back-button {
   background: transparent;
   border: none;
-  color: white;
-  font-size: 1.5rem;
-  margin-right: 10px;
+  padding: 8px;
   cursor: pointer;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
 }
+
+.back-button:hover {
+  background-color: #f8f9fa;
+}
+
+.back-icon {
+  font-size: 1.5rem;
+  color: #495057;
+}
+
+.chat-info {
+  flex: 1;
+}
+
+.chat-info h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #212529;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: #40c057;
+}
+
 .chat-messages {
   flex: 1;
-  padding: 15px;
+  padding: 20px;
   overflow-y: auto;
   background-color: #ffffff;
 }
-.chat-message {
+
+.empty-chat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #868e96;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.empty-chat h3 {
+  margin: 0 0 10px 0;
+  color: #495057;
+}
+
+.empty-chat p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.message-wrapper {
+  display: flex;
   margin-bottom: 10px;
-  padding: 8px 12px;
-  border-radius: 10px;
+}
+
+.message-wrapper.sent {
+  justify-content: flex-end;
+}
+
+.message-bubble {
   max-width: 70%;
-  word-wrap: break-word;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background-color: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-.chat-message.sent {
-  align-self: flex-end;
-  background-color: #dcf8c6;
+
+.message-wrapper.sent .message-bubble {
+  background-color: #4dabf7;
+  color: white;
 }
-.chat-message.received {
-  align-self: flex-start;
-  background-color: #ffffff;
-  border: 1px solid #ccc;
-}
+
 .message-content {
   margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
+
 .message-timestamp {
   display: block;
   font-size: 0.75rem;
-  color: #999;
   margin-top: 4px;
-  text-align: right;
+  opacity: 0.8;
 }
+
 .chat-input-container {
-  padding: 10px;
-  background-color: #f0f0f0;
-  border-top: 1px solid #ccc;
+  padding: 15px 20px;
+  background-color: #ffffff;
+  border-top: 1px solid #e9ecef;
 }
+
 .chat-input-form {
   display: flex;
   gap: 10px;
 }
-.chat-input-form input {
+
+.message-input {
   flex: 1;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 12px 15px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
 }
-.chat-input-form button {
-  margin-left: 10px;
-  padding: 10px 20px;
-  background-color: #128c7e;
+
+.message-input:focus {
+  outline: none;
+  border-color: #4dabf7;
+  box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
+}
+
+.send-button {
+  padding: 12px 24px;
+  background-color: #4dabf7;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
+  font-size: 0.95rem;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
+
+.send-button:hover {
+  background-color: #3c99e6;
+}
+
 .chat-error {
-  color: red;
-  text-align: center;
-  margin-top: 10px;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+/* Scrollbar Styling */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: #f1f3f5;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: #ced4da;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background-color: #adb5bd;
 }
 </style>
