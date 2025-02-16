@@ -5,8 +5,10 @@ import UserList from '../views/UserList.vue';
 import GroupView from '../views/GroupView.vue';
 import ChatView from '../views/ChatView.vue';
 import MyChatsView from '../views/MyChatsView.vue';
+import Login from '../components/Login.vue';
 
 const routes = [
+  {path:  '/login' , component:  Login },
   { path: '/myprofile', component: MyProfile },
   { path: '/users', component: UserList },
   { path: '/groups', component: GroupView },

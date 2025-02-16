@@ -34,7 +34,6 @@ export function getMyConversations() {
 
 export async function getConversation(conversationId) {
   try {
-    // Note: The endpoint now uses the plural "conversations" to match your backend.
     const response = await axios.get(`/conversations/${conversationId}`);
     return response;
   } catch (error) {

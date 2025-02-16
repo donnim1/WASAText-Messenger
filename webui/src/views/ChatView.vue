@@ -1,7 +1,7 @@
 <template>
   <div class="chat-view">
     <header class="chat-header">
-      <button class="back-button" @click="$router.back()">
+      <button class="back-button" @click="goBack">
         <i class="back-icon fas fa-arrow-left"></i>
       </button>
       <div class="chat-info">
@@ -10,7 +10,7 @@
           alt="Avatar"
           class="chat-avatar"
         />
-        <h2>{{ conversation.Name }}</h2>
+        <h2>{{ conversation.Name || receiverName }}</h2>
       </div>
     </header>
 
@@ -91,24 +91,27 @@ export default {
     });
 
     async function loadConversationMessages() {
-      loading.value = true;
-      chatError.value = "";
-      try {
-        const response = await getConversation(conversationId.value);
-        // Assuming your API returns the conversation object with details
-        // For example:
-        // { conversation: { id, name, photo_url, ... }, messages: [ ... ] }
-        messages.value = response.data.messages || [];
-        if(response.data.conversation) {
-          conversation.value = response.data.conversation;
-        }
-      } catch (err) {
-        chatError.value = "Failed to load messages.";
-      } finally {
-        loading.value = false;
-      }
+  loading.value = true;
+  chatError.value = "";
+  try {
+    const response = await getConversation(conversationId.value);
+    
+    if (response.data) {
+      messages.value = response.data.messages || [];
+      // Map backend fields to frontend casing
+      conversation.value = {
+        Name: response.data.conversation.name, // 'name' from backend → 'Name' in frontend
+        PhotoUrl: response.data.conversation.group_photo, // 'group_photo' → 'PhotoUrl'
+        IsGroup: response.data.conversation.is_group,
+        CreatedAt: response.data.conversation.created_at
+      };
     }
-
+  } catch (err) {
+    chatError.value = "Failed to load messages.";
+  } finally {
+    loading.value = false;
+  }
+}
     async function checkExistingConversation() {
       if (!receiverId.value) return;
       loading.value = true;
@@ -224,7 +227,8 @@ export default {
       goBack,
       messagesContainer,
       conversation,
-      defaultPhoto
+      defaultPhoto,
+      receiverName
     };
   },
 };
