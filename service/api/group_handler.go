@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/donnim1/WASAText/service/database"
 	"github.com/julienschmidt/httprouter"
@@ -37,10 +38,38 @@ func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprout
 		convs = append(convs, convertDBConversationToConversation(group))
 	}
 
+	// Process conversations and format the response.
+	var apiConversations []Conversation
+	for _, conv := range convs {
+		// For private chats (is_group false), if the conversation name is empty,
+		// try to get the chat partner's username.
+		if conv.Name == "" && !conv.IsGroup {
+			partner, err := rt.db.GetChatPartner(conv.ID, userID)
+			if err == nil && partner != nil {
+				conv.Name = partner.Username
+			}
+		}
+		// Parse and format the created_at timestamp.
+		var formattedCreatedAt string
+		t, err := time.Parse(time.RFC3339, conv.CreatedAt)
+		if err != nil {
+			formattedCreatedAt = conv.CreatedAt
+		} else {
+			formattedCreatedAt = t.Format("2006-01-02 15:04:05")
+		}
+		apiConversations = append(apiConversations, Conversation{
+			ID:        conv.ID,
+			Name:      conv.Name,
+			IsGroup:   conv.IsGroup,
+			CreatedAt: formattedCreatedAt,
+			PhotoUrl:  conv.PhotoUrl, // assign the group photo URL here
+		})
+	}
+
 	// Return the groups as JSON.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(groupListResponse{Groups: convs}); err != nil {
+	if err := json.NewEncoder(w).Encode(groupListResponse{Groups: apiConversations}); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
 }
@@ -91,18 +120,26 @@ func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 }
 
-// addToGroupRequest defines the expected JSON payload for adding a user to a group.
-// We no longer need to pass UserID in the body because we extract it from the Authorization header.
+// Modify the addToGroupRequest to include a Username instead of a user id.
 type addToGroupRequest struct {
-	GroupID string `json:"groupId"`
+	GroupID  string `json:"groupId"`
+	Username string `json:"username"` // Required: target user's username
 }
 
-// addToGroup handles POST /groups/add to add a user to a group.
-func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Validate the Authorization header and get the authenticated user ID.
-	userID, err := rt.getAuthenticatedUserID(r)
+// addToGroup handles POST /groups/add and expects a GroupID and Username.
+// It looks up the target user's ID in the users table and adds that user to the group.
+func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	// Validate the Authorization header.
+	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get the group ID from the URL parameter.
+	groupID := ps.ByName("groupId")
+	if groupID == "" {
+		http.Error(w, "Group ID is required", http.StatusBadRequest)
 		return
 	}
 
@@ -111,30 +148,47 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, _ httprout
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
+
+	// Use the group ID from the URL if not provided in the payload.
 	if req.GroupID == "" {
-		http.Error(w, "Group ID is required", http.StatusBadRequest)
+		req.GroupID = groupID
+	}
+
+	// Both GroupID and Username must be provided.
+	if req.GroupID == "" || req.Username == "" {
+		http.Error(w, "Group ID and Username are required", http.StatusBadRequest)
 		return
 	}
-	// Use the authenticated user ID instead of a request body field.
-	if err := rt.db.AddToGroup(req.GroupID, userID); err != nil {
+
+	// Look up the target user by username in the users table.
+	user, err := rt.db.GetUserByUsername(req.Username)
+	if err != nil || user == nil {
+		http.Error(w, "User not found", http.StatusBadRequest)
+		return
+	}
+
+	// Add the target user's ID to the group.
+	if err := rt.db.AddToGroup(req.GroupID, user.ID); err != nil {
 		http.Error(w, "Failed to add user to group: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{"message": "User added to group successfully"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"message": "User added to group successfully",
+	}); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
 }
 
 // leaveGroupRequest defines the expected JSON payload for leaving a group.
-// We no longer need to pass UserID in the body because we extract it from the Authorization header.
 type leaveGroupRequest struct {
 	GroupID string `json:"groupId"`
 }
 
 // leaveGroup handles DELETE /groups/leave to remove a user from a group.
-func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Validate the Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -142,11 +196,21 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, _ httprout
 		return
 	}
 
+	// Get the group ID from the URL parameter.
+	groupID := ps.ByName("groupId")
+
 	var req leaveGroupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && groupID == "" {
+		// Only error if no group ID is available
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
+
+	// Use the group ID from the URL if not provided in the request body.
+	if req.GroupID == "" {
+		req.GroupID = groupID
+	}
+
 	if req.GroupID == "" {
 		http.Error(w, "Group ID is required", http.StatusBadRequest)
 		return
@@ -162,14 +226,10 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, _ httprout
 	}
 }
 
-// setGroupNameRequest defines the expected JSON payload for updating a group's name.
-type setGroupNameRequest struct {
-	GroupID string `json:"groupId"`
-	NewName string `json:"newName"`
-}
+// Removed unused setGroupNameRequest as it is not used.
 
 // setGroupName handles PUT /groups/name to update a group's name.
-func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Validate the Authorization header.
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -177,19 +237,32 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, _ httpro
 		return
 	}
 
-	var req setGroupNameRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// Use the groupId from the URL parameter.
+	groupID := ps.ByName("groupId")
+	if groupID == "" {
+		http.Error(w, "Group ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Define a payload struct that only requires the new name.
+	var payload struct {
+		NewName string `json:"newName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
-	if req.GroupID == "" || req.NewName == "" {
-		http.Error(w, "Group ID and new name are required", http.StatusBadRequest)
+
+	if payload.NewName == "" {
+		http.Error(w, "New name is required", http.StatusBadRequest)
 		return
 	}
-	if err := rt.db.SetGroupName(req.GroupID, req.NewName); err != nil {
+
+	if err := rt.db.SetGroupName(groupID, payload.NewName); err != nil {
 		http.Error(w, "Failed to update group name: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Group name updated successfully"}); err != nil {
@@ -200,7 +273,7 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, _ httpro
 // setGroupPhotoRequest defines the expected JSON payload for updating a group's photo.
 type setGroupPhotoRequest struct {
 	GroupID  string `json:"groupId"`
-	PhotoURL string `json:"photoUrl"`
+	PhotoUrl string `json:"photoUrl"`
 }
 
 // setGroupPhoto handles PUT /groups/photo to update a group's photo.
@@ -208,13 +281,14 @@ type setGroupPhotoRequest struct {
 // Adjust the fields below as needed to match both types.
 func convertDBConversationToConversation(dbConv database.Conversation) Conversation {
 	return Conversation{
-		ID:   dbConv.ID,
-		Name: dbConv.Name,
+		ID:       dbConv.ID,
+		Name:     dbConv.Name,
+		PhotoUrl: dbConv.PhotoUrl, // assuming database.Conversation has a Photo field instead of PhotoURL
 		// add other fields as needed
 	}
 }
 
-func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Validate the Authorization header.
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -222,19 +296,32 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, _ httpr
 		return
 	}
 
-	var req setGroupPhotoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// Extract the group ID from the URL parameter.
+	groupID := ps.ByName("groupId")
+	if groupID == "" {
+		http.Error(w, "Group ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Define a payload struct that only requires the photo URL.
+	var payload struct {
+		PhotoUrl string `json:"photoUrl"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
-	if req.GroupID == "" || req.PhotoURL == "" {
-		http.Error(w, "Group ID and photo URL are required", http.StatusBadRequest)
+	if payload.PhotoUrl == "" {
+		http.Error(w, "Photo URL is required", http.StatusBadRequest)
 		return
 	}
-	if err := rt.db.SetGroupPhoto(req.GroupID, req.PhotoURL); err != nil {
+
+	// Update the group photo using the group ID from the URL.
+	if err := rt.db.SetGroupPhoto(groupID, payload.PhotoUrl); err != nil {
 		http.Error(w, "Failed to update group photo: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Group photo updated successfully"}); err != nil {

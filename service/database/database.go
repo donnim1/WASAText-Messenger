@@ -54,16 +54,19 @@ type appdbimpl struct {
 type User struct {
 	ID       string
 	Username string
-	PhotoURL sql.NullString // Now handles NULL values; optional profile photo URL.
+	PhotoUrl sql.NullString // Now handles NULL values; optional profile photo URL.
 }
 
 // Conversation represents a conversation record.
 type Conversation struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	IsGroup   bool   `json:"is_group"`
-	CreatedAt string `json:"created_at"`
-	Messages []Message `json:"messages"` // Timestamp of when the conversation was created
+	ID                 string         `json:"id"`
+	Name               string         `json:"name"`
+	IsGroup            bool           `json:"is_group"`
+	CreatedAt          string         `json:"created_at"`
+	Messages           []Message      `json:"messages"`
+	PhotoUrl           string         `json:"photoUrl"`             // Timestamp of when the conversation was created
+	LastMessageContent sql.NullString `json:"last_message_content"` // New field for the last message content
+	LastMessageSentAt  sql.NullString `json:"last_message_sent_at"` // New field for the last message sent time
 }
 
 type Message struct {
@@ -75,53 +78,52 @@ type Message struct {
 	SentAt         string         // using string for simplicity; you may use time.Time
 }
 
-
 // GetConversationBetween looks for an existing conversation that includes both userID1 and userID2.
 func (db *appdbimpl) GetConversationBetween(userID1, userID2 string) (*Conversation, error) {
-    // Example SQL: Adjust based on your conversation/members table structure.
-    query := `
+	// Example SQL: Adjust based on your conversation/members table structure.
+	query := `
         SELECT c.id
         FROM conversations c
-        INNER JOIN conversation_members cm1 ON c.id = cm1.conversation_id
-        INNER JOIN conversation_members cm2 ON c.id = cm2.conversation_id
+        INNER JOIN group_members cm1 ON c.id = cm1.group_id
+        INNER JOIN group_members cm2 ON c.id = cm2.group_id
         WHERE cm1.user_id = ? AND cm2.user_id = ?
         LIMIT 1
     `
-    var convID string
-    err := db.db.QueryRow(query, userID1, userID2).Scan(&convID)
-    if err != nil {
-        if err == sql.ErrNoRows {
-            return nil, errors.New("conversation not found")
-        }
-        return nil, err
-    }
+	var convID string
+	err := db.db.QueryRow(query, userID1, userID2).Scan(&convID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("conversation not found")
+		}
+		return nil, err
+	}
 
-    // Retrieve messages for the conversation.
-    msgQuery := `
+	// Retrieve messages for the conversation.
+	msgQuery := `
         SELECT id, sender_id, content, sent_at 
         FROM messages 
         WHERE conversation_id = ?
         ORDER BY sent_at ASC
     `
-    rows, err := db.db.Query(msgQuery, convID)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	rows, err := db.db.Query(msgQuery, convID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-    var messages []Message
-    for rows.Next() {
-        var msg Message
-        if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.Content, &msg.SentAt); err != nil {
-            return nil, err
-        }
-        messages = append(messages, msg)
-    }
+	var messages []Message
+	for rows.Next() {
+		var msg Message
+		if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.Content, &msg.SentAt); err != nil {
+			return nil, err
+		}
+		messages = append(messages, msg)
+	}
 
-    return &Conversation{
-        ID:       convID,
-        Messages: messages,
-    }, nil
+	return &Conversation{
+		ID:       convID,
+		Messages: messages,
+	}, nil
 }
 
 // GetGroupsByUserID retrieves all group conversations associated with a user.
@@ -141,8 +143,8 @@ func (db *appdbimpl) GetGroupsByUserID(userID string) ([]Conversation, error) {
 	var groups []Conversation
 	for rows.Next() {
 		var conv Conversation
-		// If you want to include group_photo, consider adding it to the Conversation struct.
-		if err := rows.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt, new(interface{})); err != nil {
+		// Previously, group_photo was scanned into a new interface{}
+		if err := rows.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt, &conv.PhotoUrl); err != nil {
 			return nil, fmt.Errorf("failed to scan group: %w", err)
 		}
 		groups = append(groups, conv)
@@ -205,7 +207,7 @@ func (db *appdbimpl) ListUsers() ([]User, error) {
 	var users []User
 	for rows.Next() {
 		var user User
-		if err := rows.Scan(&user.ID, &user.Username, &user.PhotoURL); err != nil {
+		if err := rows.Scan(&user.ID, &user.Username, &user.PhotoUrl); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
 		users = append(users, user)
@@ -220,24 +222,38 @@ func (db *appdbimpl) ListUsers() ([]User, error) {
 func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Message, error) {
 	// Retrieve conversation details.
 	var conv Conversation
-	// Use a sql.NullString for the name column.
-	var name sql.NullString
-	err := db.db.QueryRow("SELECT id, name, is_group, created_at FROM conversations WHERE id = ?", conversationID).
-		Scan(&conv.ID, &name, &conv.IsGroup, &conv.CreatedAt)
+	// Use sql.NullString for optional fields.
+	var name, groupPhoto sql.NullString
+	err := db.db.QueryRow(`
+        SELECT id, name, is_group, created_at, group_photo 
+        FROM conversations 
+        WHERE id = ?`, conversationID).
+		Scan(&conv.ID, &name, &conv.IsGroup, &conv.CreatedAt, &groupPhoto)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil // Conversation not found.
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve conversation: %w", err)
 	}
-	// Convert sql.NullString to string.
+
+	// Convert sql.NullString values.
 	if name.Valid {
 		conv.Name = name.String
 	} else {
 		conv.Name = ""
 	}
 
+	if groupPhoto.Valid {
+		conv.PhotoUrl = groupPhoto.String
+	} else {
+		conv.PhotoUrl = ""
+	}
+
 	// Retrieve messages for this conversation.
-	rows, err := db.db.Query("SELECT id, conversation_id, sender_id, content, reply_to, sent_at FROM messages WHERE conversation_id = ? ORDER BY sent_at ASC", conversationID)
+	rows, err := db.db.Query(`
+        SELECT id, conversation_id, sender_id, content, reply_to, sent_at 
+        FROM messages 
+        WHERE conversation_id = ? 
+        ORDER BY sent_at ASC`, conversationID)
 	if err != nil {
 		return &conv, nil, fmt.Errorf("failed to retrieve messages: %w", err)
 	}
@@ -367,7 +383,7 @@ func (db *appdbimpl) CreateUser(username string) (string, error) {
 func (db *appdbimpl) GetUserByUsername(username string) (*User, error) {
 	row := db.db.QueryRow("SELECT id, username, photo_url FROM users WHERE username = ?", username)
 	var user User
-	err := row.Scan(&user.ID, &user.Username, &user.PhotoURL)
+	err := row.Scan(&user.ID, &user.Username, &user.PhotoUrl)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil // User does not exist.
 	} else if err != nil {
@@ -434,11 +450,26 @@ func GenerateNewID() (string, error) {
 
 // GetConversationsByUserID retrieves all conversations associated with a user.
 func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, error) {
-	rows, err := db.db.Query(`
-		SELECT c.id, c.name, c.is_group, c.created_at
-		FROM conversations c
-		JOIN group_members gm ON c.id = gm.group_id
-		WHERE gm.user_id = ?`, userID)
+	query := `
+    SELECT 
+      c.id, 
+      c.name, 
+      c.is_group, 
+      c.created_at, 
+      c.group_photo,
+      COALESCE(
+        (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY sent_at DESC LIMIT 1), 
+        ''
+      ) AS last_message_content,
+      COALESCE(
+        (SELECT sent_at FROM messages WHERE conversation_id = c.id ORDER BY sent_at DESC LIMIT 1), 
+        ''
+      ) AS last_message_sent_at
+    FROM conversations c
+    JOIN group_members gm ON c.id = gm.group_id
+    WHERE gm.user_id = ?
+  `
+	rows, err := db.db.Query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch conversations: %w", err)
 	}
@@ -448,7 +479,16 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 	for rows.Next() {
 		var conv Conversation
 		var name sql.NullString
-		if err := rows.Scan(&conv.ID, &name, &conv.IsGroup, &conv.CreatedAt); err != nil {
+		var groupPhoto sql.NullString
+		if err := rows.Scan(
+			&conv.ID,
+			&name,
+			&conv.IsGroup,
+			&conv.CreatedAt,
+			&groupPhoto,
+			&conv.LastMessageContent, // Now scanned as string (with COALESCE, never NULL)
+			&conv.LastMessageSentAt,  // Now scanned as string too.
+		); err != nil {
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
 		if name.Valid {
@@ -456,10 +496,14 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 		} else {
 			conv.Name = ""
 		}
+		if groupPhoto.Valid {
+			conv.PhotoUrl = groupPhoto.String
+		} else {
+			conv.PhotoUrl = ""
+		}
 		conversations = append(conversations, conv)
 	}
-
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return conversations, nil
@@ -610,7 +654,7 @@ func (db *appdbimpl) DeleteMessage(messageID, senderID string) error {
 
 // In database.go - AddToGroup function:
 func (db *appdbimpl) AddToGroup(groupID, userID string) error {
-	// Verify target is a group
+	// Verify the conversation is a group.
 	var isGroup bool
 	err := db.db.QueryRow("SELECT is_group FROM conversations WHERE id = ?", groupID).Scan(&isGroup)
 	if err != nil {
@@ -620,20 +664,19 @@ func (db *appdbimpl) AddToGroup(groupID, userID string) error {
 		return errors.New("cannot add members to private chats")
 	}
 
-	// Check existing membership
-	var exists bool
-	err = db.db.QueryRow("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
-		groupID, userID).Scan(&exists)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	// Check if the user is already a member.
+	var count int
+	err = db.db.QueryRow("SELECT COUNT(*) FROM group_members WHERE group_id = ? AND user_id = ?", groupID, userID).Scan(&count)
+	if err != nil {
 		return fmt.Errorf("membership check failed: %w", err)
 	}
-	if exists {
-		return nil // Already member, return success
+	if count > 0 {
+		// Already a member; consider this a success.
+		return nil
 	}
 
-	// Proceed with insertion
-	_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
-		groupID, userID)
+	// Insert the new group membership.
+	_, err = db.db.Exec("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", groupID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to add user to group: %w", err)
 	}
@@ -686,7 +729,7 @@ func (db *appdbimpl) GetChatPartner(conversationID, currentUserID string) (*User
 		conversationID, currentUserID,
 	)
 	var user User
-	err := row.Scan(&user.ID, &user.Username, &user.PhotoURL)
+	err := row.Scan(&user.ID, &user.Username, &user.PhotoUrl)
 	if err != nil {
 		return nil, err
 	}

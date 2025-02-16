@@ -32,8 +32,14 @@ export function getMyConversations() {
   return axios.get('/conversation/myconversations');
 }
 
-export function getConversation(conversationId) {
-  return axios.get(`/conversations/${conversationId}`);
+export async function getConversation(conversationId) {
+  try {
+    // Note: The endpoint now uses the plural "conversations" to match your backend.
+    const response = await axios.get(`/conversations/${conversationId}`);
+    return response;
+  } catch (error) {
+    throw error.response?.data || 'Failed to load conversation.';
+  }
 }
 
 export function getConversationByReceiver(receiverId) {
@@ -92,8 +98,7 @@ export function setGroupPhoto(groupId, payload) {
 }
 
 export async function addUserToGroupByUsername(groupId, username) {
-  // This example assumes your backend exposes an endpoint to add by username.
-  return axios.post(`/groups/members/${groupId}/by-username`, { username });
+  return axios.post(`/groups/${groupId}/members`, { username });
 }
 
 

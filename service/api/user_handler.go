@@ -65,7 +65,7 @@ func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, _ httpr
 // userPhotoUpdateRequest defines the expected JSON payload for updating the user photo.
 type userPhotoUpdateRequest struct {
 	UserID   string `json:"id"`                 // User identifier (typically derived from auth, here passed explicitly)
-	PhotoURL string `json:"photoUrl,omitempty"` // New photo URL to update to
+	PhotoUrl string `json:"photoUrl,omitempty"` // New photo URL to update to
 }
 
 // setMyPhoto updates the user's profile photo.
@@ -109,48 +109,48 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 		}
 
 		// Save file URL to database
-		photoURL := fmt.Sprintf("http://localhost:3000/%s", filePath)
-		if err := rt.db.UpdateUserPhoto(userID, photoURL); err != nil {
+		photoUrl := fmt.Sprintf("http://localhost:3000/%s", filePath)
+		if err := rt.db.UpdateUserPhoto(userID, photoUrl); err != nil {
 			log.Printf("❌ Database update failed: %v", err)
 			http.Error(w, "Failed to update photo in database", http.StatusInternalServerError)
 			return
 		}
 
 		// Respond with the new photo URL
-		response := map[string]string{"photoUrl": photoURL}
+		response := map[string]string{"photoUrl": photoUrl}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			log.Printf("Error encoding JSON response: %v", err)
 		}
 
-		log.Println("✅ Photo successfully updated:", photoURL)
+		log.Println("✅ Photo successfully updated:", photoUrl)
 		return
 	}
 
 	// If file upload fails, try JSON-based photo update
 	var req userPhotoUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
-		if req.PhotoURL == "" {
+		if req.PhotoUrl == "" {
 			log.Println("❌ Invalid photo URL received")
 			http.Error(w, "Invalid photo URL", http.StatusBadRequest)
 			return
 		}
 
 		// Update database
-		if err := rt.db.UpdateUserPhoto(userID, req.PhotoURL); err != nil {
+		if err := rt.db.UpdateUserPhoto(userID, req.PhotoUrl); err != nil {
 			log.Printf("❌ Database update failed: %v", err)
 			http.Error(w, "Failed to update photo URL", http.StatusInternalServerError)
 			return
 		}
 
 		// Respond with success
-		response := map[string]string{"photoUrl": req.PhotoURL}
+		response := map[string]string{"photoUrl": req.PhotoUrl}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			log.Printf("Error encoding JSON response: %v", err)
 		}
 
-		log.Println("✅ Photo URL successfully updated:", req.PhotoURL)
+		log.Println("✅ Photo URL successfully updated:", req.PhotoUrl)
 		return
 	}
 
@@ -167,7 +167,7 @@ type listUsersResponse struct {
 type UserSummary struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
-	PhotoURL string `json:"photoUrl"`
+	PhotoUrl string `json:"photoUrl"`
 }
 
 // listUsers handles GET requests to /users and returns all users.
@@ -190,13 +190,13 @@ func (rt *_router) listUsers(w http.ResponseWriter, r *http.Request, _ httproute
 	var summaries []UserSummary
 	for _, u := range users {
 		photo := ""
-		if u.PhotoURL.Valid {
-			photo = u.PhotoURL.String
+		if u.PhotoUrl.Valid {
+			photo = u.PhotoUrl.String
 		}
 		summaries = append(summaries, UserSummary{
 			ID:       u.ID,
 			Username: u.Username,
-			PhotoURL: photo,
+			PhotoUrl: photo,
 		})
 	}
 

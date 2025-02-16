@@ -1,27 +1,34 @@
 <template>
   <div class="chat-view">
-    <!-- Chat Header -->
-    <div class="chat-header">
-      <div class="header-content">
-        <button class="back-button" @click="goBack">
-          <span class="back-icon">←</span>
-        </button>
-        <div class="chat-info">
-          <h2>{{ conversationTitle }}</h2>
-          <span class="status">Online</span>
-        </div>
+    <header class="chat-header">
+      <button class="back-button" @click="$router.back()">
+        <i class="back-icon fas fa-arrow-left"></i>
+      </button>
+      <div class="chat-info">
+        <img
+          :src="conversation.PhotoUrl || defaultPhoto"
+          alt="Avatar"
+          class="chat-avatar"
+        />
+        <h2>{{ conversation.Name }}</h2>
       </div>
-    </div>
+    </header>
 
     <!-- Messages Container -->
     <div class="chat-messages" ref="messagesContainer">
-      <div v-if="messages.length === 0" class="empty-chat">
+      <div v-if="loading" class="loading-state">
+        <div class="loading-spinner"></div>
+        <p>Loading messages...</p>
+      </div>
+
+      <div v-else-if="messages.length === 0" class="empty-chat">
         <div class="empty-icon">💭</div>
         <h3>No Messages Yet</h3>
         <p>Start the conversation by sending a message</p>
       </div>
       
       <div
+        v-else
         v-for="msg in messages"
         :key="msg.ID"
         :class="['message-wrapper', { 'sent': msg.SenderID === currentUserId }]"
@@ -56,7 +63,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { getConversation, sendMessage, getConversationByReceiver } from "@/services/api.js";
 
@@ -65,94 +72,161 @@ export default {
   setup() {
     const route = useRoute();
     const router = useRouter();
-
-    // Get conversation and user details
     const conversationId = ref(route.params.conversationId || "");
     const receiverId = ref(route.query.receiverId || "");
     const receiverName = ref(route.query.receiverName || "");
     const messages = ref([]);
     const newMessage = ref("");
     const chatError = ref("");
+    const loading = ref(false);
     const currentUserId = localStorage.getItem("userID") || "";
+    const messagesContainer = ref(null);
+    // Holds conversation details (name, photo, etc.)
+    const conversation = ref({});
+    const defaultPhoto =
+      "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
 
-    // Default title when no conversation is available
-    const conversationTitle = ref(receiverName.value || "Chat");
+    const conversationTitle = computed(() => {
+      return receiverName.value || "Chat";
+    });
 
-    // Function to load messages
     async function loadConversationMessages() {
+      loading.value = true;
+      chatError.value = "";
       try {
-        if (conversationId.value) {
-          const response = await getConversation(conversationId.value);
-          messages.value = response.data.messages || [];
-        } else if (receiverId.value) {
-          // Try to load conversation by receiver if conversationId is missing
-          const response = await getConversationByReceiver(receiverId.value);
-          if (response.data.conversationId) {
-            conversationId.value = response.data.conversationId;
-            messages.value = response.data.messages || [];
-            // Update URL to include conversation ID
-            router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
-          }
+        const response = await getConversation(conversationId.value);
+        // Assuming your API returns the conversation object with details
+        // For example:
+        // { conversation: { id, name, photo_url, ... }, messages: [ ... ] }
+        messages.value = response.data.messages || [];
+        if(response.data.conversation) {
+          conversation.value = response.data.conversation;
         }
       } catch (err) {
-        console.error("Error loading messages:", err);
-        chatError.value = "Failed to load messages";
+        chatError.value = "Failed to load messages.";
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    async function checkExistingConversation() {
+      if (!receiverId.value) return;
+      loading.value = true;
+      try {
+        const response = await getConversationByReceiver(receiverId.value);
+        if (response.data.conversationId) {
+          conversationId.value = response.data.conversationId;
+          router.replace({
+            name: "ChatView",
+            params: { conversationId: conversationId.value }
+          });
+        }
+      } catch (err) {
+        console.error("No existing conversation found:", err);
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    function scrollToBottom() {
+      if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
       }
     }
 
     async function sendMessageHandler() {
       if (!newMessage.value.trim()) return;
+      chatError.value = "";
+      
+      const payload = {
+        conversationId: conversationId.value,
+        receiverId: receiverId.value,
+        content: newMessage.value,
+      };
+
       try {
-        const response = await sendMessage({
-          conversationId: conversationId.value,
-          receiverId: receiverId.value,
-          content: newMessage.value
-        });
-        if (response.data.conversationId && !conversationId.value) {
-          conversationId.value = response.data.conversationId;
-          router.replace({ name: "ChatView", params: { conversationId: conversationId.value } });
-        }
+        const response = await sendMessage(payload);
         newMessage.value = "";
-        loadConversationMessages();
+        
+        // If no conversation existed before and the backend created one, update the conversationId and the route
+        if (!conversationId.value && response.data.conversationId) {
+          conversationId.value = response.data.conversationId;
+          router.replace({
+            name: "ChatView",
+            params: { conversationId: conversationId.value }
+          });
+        }
+        
+        await loadConversationMessages();
+        await nextTick();
+        scrollToBottom();
       } catch (err) {
         console.error("Error sending message:", err);
         chatError.value = "Failed to send message";
       }
     }
 
+    async function initializeChat() {
+      if (conversationId.value) {
+        await loadConversationMessages();
+      } else if (receiverId.value) {
+        await checkExistingConversation();
+      }
+    }
+
+    onMounted(() => {
+      initializeChat();
+    });
+
+    // Watch for route changes (if applicable)
+    watch(
+      () => route.params.conversationId,
+      async (newId) => {
+        if (newId) {
+          conversationId.value = newId;
+          await loadConversationMessages();
+        }
+      }
+    );
+
+    watch(
+      () => route.query.receiverId,
+      async (newReceiverId) => {
+        if (newReceiverId) {
+          receiverId.value = newReceiverId;
+          await checkExistingConversation();
+        }
+      }
+    );
+
     function formatTimestamp(ts) {
-      return new Date(ts).toLocaleTimeString();
+      if (!ts) return '';
+      const date = new Date(ts);
+      return date.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit'
+      });
     }
 
     function goBack() {
       router.back();
     }
 
-    onMounted(() => {
-      loadConversationMessages();
-    });
-
-    watch(
-      () => route.params.conversationId,
-      (newId) => {
-        if (newId) {
-          conversationId.value = newId;
-          loadConversationMessages();
-        }
-      }
-    );
-
     return {
       conversationTitle,
       messages,
       newMessage,
       chatError,
+      loading,
       sendMessageHandler,
       formatTimestamp,
+      currentUserId,
       goBack,
-      currentUserId
+      messagesContainer,
+      conversation,
+      defaultPhoto
     };
-  }
+  },
 };
 </script>
 
@@ -168,9 +242,6 @@ export default {
   background-color: #ffffff;
   border-bottom: 1px solid #e9ecef;
   padding: 15px 20px;
-}
-
-.header-content {
   display: flex;
   align-items: center;
   gap: 15px;
@@ -196,6 +267,16 @@ export default {
 
 .chat-info {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chat-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .chat-info h2 {
@@ -214,6 +295,30 @@ export default {
   padding: 20px;
   overflow-y: auto;
   background-color: #ffffff;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #868e96;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #4dabf7;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .empty-chat {

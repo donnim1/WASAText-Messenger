@@ -40,8 +40,8 @@ func (rt *_router) postSession(w http.ResponseWriter, r *http.Request, _ httprou
 		// Existing user: retrieve stored details.
 		userID = user.ID
 		username = user.Username
-		if user.PhotoURL.Valid {
-			photoURL = user.PhotoURL.String
+		if user.PhotoUrl.Valid {
+			photoURL = user.PhotoUrl.String
 		}
 	} else {
 		// Create new user.

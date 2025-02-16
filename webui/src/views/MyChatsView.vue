@@ -4,50 +4,39 @@
       <!-- Left Panel: Conversations List -->
       <div class="conversations-panel">
         <div class="panel-header">
-          <h1>Messages</h1>
-          <div class="search-container">
-            <input
-              v-model="userSearchQuery"
-              placeholder="Search conversations..."
-              class="search-input"
-            />
-          </div>
+          <h2>Conversations</h2>
         </div>
 
         <div v-if="conversationsError" class="error">{{ conversationsError }}</div>
         
         <div class="conversations-list">
-          <div v-if="conversations.length" class="conversation-items">
-            <div
-              v-for="conv in conversations"
-              :key="conv.id"
-              class="conversation-item"
-              :class="{ 'unread': conv.unread }"
-              @click="openConversation(conv.id)"
-            >
-              <div class="conversation-avatar">
-                <img
-                  :src="conv.photo || defaultPhoto"
-                  :alt="conv.name || 'Chat'"
-                  class="avatar-image"
-                />
-                <div v-if="conv.online" class="online-indicator"></div>
-              </div>
-              <div class="conversation-content">
-                <div class="conversation-header">
-                  <h3 class="conversation-name">{{ conv.name || 'Private Chat' }}</h3>
-                  <span class="timestamp">{{ formatTimestamp(conv.lastMessage?.sent_at || conv.created_at) }}</span>
-                </div>
-                <p class="last-message" :class="{ 'no-message': !conv.lastMessage }">
-                  {{ conv.lastMessage ? conv.lastMessage.content : 'No messages yet' }}
-                </p>
-              </div>
+          <div
+            v-for="conv in conversations"
+            :key="conv.id"
+            class="conversation-item"
+            @click="openConversation(conv)"
+          >
+            <div class="conversation-avatar">
+              <img
+                :src="conv.group_photo || defaultPhoto"
+                alt="Avatar"
+                class="avatar-image"
+              />
+              <!-- Optionally, show an online-indicator for private chats -->
+              <span v-if="!conv.IsGroup" class="online-indicator"></span>
             </div>
-          </div>
-          <div v-else class="empty-state">
-            <div class="empty-icon">💬</div>
-            <h3>No Conversations Yet</h3>
-            <p>Start chatting with someone from your contacts</p>
+            <div class="conversation-content">
+              <div class="conversation-header">
+                <h3 class="conversation-name">{{ conv.name }}</h3>
+                <span class="timestamp">{{ conv.created_at }}</span>
+              </div>
+              <p class="last-message">
+                {{ conv.last_message_content || 'No messages yet.' }}
+              </p>
+              <span class="timestamp">
+                {{ formatTimestamp(conv.last_message_sent_at) }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -94,7 +83,7 @@
 
 <script>
 import { ref, computed, onMounted } from "vue";
-import { getMyConversations, listUsers } from "@/services/api.js";
+import { getMyConversations, listUsers, getConversationByReceiver } from "@/services/api.js";
 import { useRouter } from "vue-router";
 
 export default {
@@ -141,16 +130,31 @@ export default {
       );
     });
 
-    function openConversation(conversationId) {
-      router.push({ name: "ChatView", params: { conversationId } });
+    function openConversation(conv) {
+      router.push({ name: "ChatView", params: { conversationId: conv.id } });
     }
 
     function openChatWithUser(user) {
-      router.push({
-        name: "ChatView",
-        params: { conversationId: "" },
-        query: { receiverId: user.id, receiverName: user.username }
-      });
+      getConversationByReceiver(user.id)
+        .then(response => {
+          // Open chat if conversation exists
+          router.push({
+            name: "ChatView",
+            params: { conversationId: response.data.conversationId }
+          });
+        })
+        .catch(error => {
+          if (error.response && error.response.status === 404) {
+            // If conversation doesn't exist, navigate with receiver's ID to start a new string
+            router.push({
+              name: "ChatView",
+              params: { conversationId: "" },
+              query: { receiverId: user.id, receiverName: user.name }
+            });
+          } else {
+            console.error("Error checking conversation:", error);
+          }
+        });
     }
 
     function formatTimestamp(ts) {

@@ -24,7 +24,7 @@
             >
               <div class="group-avatar">
                 <img
-                  :src="group.photo || defaultGroupPhoto"
+                  :src="group.photoUrl || defaultGroupPhoto"
                   :alt="group.name"
                   class="avatar-image"
                 />
@@ -36,7 +36,7 @@
                     <button class="action-button edit" @click="openUpdateGroupModal(group)">
                       Edit
                     </button>
-                    <button class="action-button add" @click="promptAddUser(group.id)">
+                    <button class="action-button add" @click="openAddUserModal(group.id)">
                       Add
                     </button>
                     <button class="action-button leave" @click="leaveGroupHandler(group.id)">
@@ -130,6 +130,23 @@
       </div>
     </div>
 
+    <!-- Add User Modal -->
+    <div class="modal" v-if="showAddUserModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Add User to Group</h2>
+          <button class="close-button" @click="closeAddUserModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <ul>
+            <li v-for="user in availableUsers" :key="user.id" @click="addUser(user)">
+              {{ user.username }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
     <!-- Notifications -->
     <div v-if="message" class="notification success">{{ message }}</div>
     <div v-if="error" class="notification error">{{ error }}</div>
@@ -143,6 +160,7 @@ import {
   addUserToGroupByUsername,
   leaveGroup,
   listUserGroups,
+  listUsers,
   setGroupName,
   setGroupPhoto,
 } from "@/services/api.js";
@@ -158,9 +176,12 @@ export default {
     const defaultGroupPhoto = ref("https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg");
     const showCreateGroupModal = ref(false);
     const showUpdateModal = ref(false);
+    // NEW: Add reactive state for the add user modal and available users.
+    const showAddUserModal = ref(false);
+    const availableUsers = ref([]);
+    const selectedGroup = ref(null);
     const updateGroupName = ref("");
     const updateGroupPhoto = ref("");
-    const selectedGroup = ref(null);
 
     async function createGroupHandler() {
       message.value = "";
@@ -193,7 +214,6 @@ export default {
 
     async function leaveGroupHandler(groupId) {
       if (!confirm("Are you sure you want to leave this group?")) return;
-      
       message.value = "";
       error.value = "";
       try {
@@ -206,26 +226,45 @@ export default {
       }
     }
 
-    async function promptAddUser(groupId) {
+    // NEW: Replace promptAddUser with an open modal method.
+    async function openAddUserModal(groupId) {
       message.value = "";
       error.value = "";
-      const targetUsername = prompt("Enter the username to add:");
-      if (targetUsername) {
-        try {
-          await addUserToGroupByUsername(groupId, targetUsername);
-          message.value = "User added successfully";
-          refreshGroups();
-        } catch (err) {
-          error.value = "Failed to add user to group";
-          console.error(err);
-        }
+      selectedGroup.value = groups.value.find(g => g.id === groupId);
+      try {
+        const response = await listUsers();
+        availableUsers.value = response.data.users || [];
+        showAddUserModal.value = true;
+      } catch (err) {
+        error.value = "Failed to load users";
+        console.error(err);
       }
+    }
+
+    // NEW: When a user is selected from the modal
+    async function addUser(user) {
+      message.value = "";
+      error.value = "";
+      try {
+        await addUserToGroupByUsername(selectedGroup.value.id, user.username);
+        message.value = `User ${user.username} added successfully`;
+        showAddUserModal.value = false;
+        refreshGroups();
+      } catch (err) {
+        error.value = "Failed to add user to group";
+        console.error(err);
+      }
+    }
+
+    function closeAddUserModal() {
+      showAddUserModal.value = false;
     }
 
     function openUpdateGroupModal(group) {
       selectedGroup.value = group;
       updateGroupName.value = group.name;
-      updateGroupPhoto.value = group.photo || "";
+      // Change here: use photoURL instead of photo.
+      updateGroupPhoto.value = group.photoUrl|| "";
       showUpdateModal.value = true;
     }
 
@@ -264,7 +303,8 @@ export default {
       showCreateGroupModal,
       createGroupHandler,
       leaveGroupHandler,
-      promptAddUser,
+      // Replace promptAddUser with openAddUserModal
+      openAddUserModal,
       refreshGroups,
       showUpdateModal,
       updateGroupName,
@@ -272,6 +312,11 @@ export default {
       openUpdateGroupModal,
       updateGroupHandler,
       closeUpdateModal,
+      // NEW:
+      showAddUserModal,
+      availableUsers,
+      addUser,
+      closeAddUserModal,
     };
   },
 };
