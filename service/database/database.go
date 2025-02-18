@@ -87,6 +87,7 @@ func (db *appdbimpl) GetConversationBetween(userID1, userID2 string) (*Conversat
         INNER JOIN group_members cm1 ON c.id = cm1.group_id
         INNER JOIN group_members cm2 ON c.id = cm2.group_id
         WHERE cm1.user_id = ? AND cm2.user_id = ?
+		AND c.is_group = 0
         LIMIT 1
     `
 	var convID string

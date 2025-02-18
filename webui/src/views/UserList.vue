@@ -107,13 +107,29 @@ export default {
       }
     }
 
-    function openChatWithUser(user) {
-      router.push({
-        name: "ChatView",
-        params: { conversationId: "" },
-        query: { receiverId: user.id, receiverName: user.username }
-      });
-    }
+// In MyChatsView.vue - openChatWithUser
+function openChatWithUser(user) {
+  getConversationByReceiver(user.id)
+    .then(response => {
+      if (response.status === 200) {
+        // Existing conversation found
+        router.push({
+          name: "ChatView",
+          params: { conversationId: response.data.conversationId }
+        });
+      } else if (response.status === 404) {
+        // No conversation exists - start new chat
+        router.push({
+          name: "ChatView",
+          params: { conversationId: "" },
+          query: { receiverId: user.id, receiverName: user.username }
+        });
+      }
+    })
+    .catch(error => {
+      console.error("Error checking conversation:", error);
+    });
+}
 
     onMounted(() => {
       refreshUsers();

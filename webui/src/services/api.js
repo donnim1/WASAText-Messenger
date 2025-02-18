@@ -99,5 +99,3 @@ export function setGroupPhoto(groupId, payload) {
 export async function addUserToGroupByUsername(groupId, username) {
   return axios.post(`/groups/${groupId}/members`, { username });
 }
-
-
