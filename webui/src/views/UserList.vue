@@ -75,7 +75,7 @@
 
 <script>
 import { ref, computed, onMounted } from "vue";
-import { listUsers } from "@/services/api.js";
+import { listUsers, getConversationByReceiver } from "@/services/api.js";
 import { useRouter } from "vue-router";
 
 export default {
@@ -107,29 +107,28 @@ export default {
       }
     }
 
-// In MyChatsView.vue - openChatWithUser
-function openChatWithUser(user) {
-  getConversationByReceiver(user.id)
-    .then(response => {
-      if (response.status === 200) {
-        // Existing conversation found
-        router.push({
-          name: "ChatView",
-          params: { conversationId: response.data.conversationId }
+    function openChatWithUser(user) {
+      getConversationByReceiver(user.id)
+        .then(response => {
+          // Conversation exists
+          router.push({
+            name: "ChatView",
+            params: { conversationId: response.data.conversationId }
+          });
+        })
+        .catch(e => {
+          // If 404, it means no conversation exists
+          if (e.response && e.response.status === 404) {
+            router.push({
+              name: "ChatView",
+              params: { conversationId: "" },
+              query: { receiverId: user.id, receiverName: user.username }
+            });
+          } else {
+            console.error("Error checking conversation:", e);
+          }
         });
-      } else if (response.status === 404) {
-        // No conversation exists - start new chat
-        router.push({
-          name: "ChatView",
-          params: { conversationId: "" },
-          query: { receiverId: user.id, receiverName: user.username }
-        });
-      }
-    })
-    .catch(error => {
-      console.error("Error checking conversation:", error);
-    });
-}
+    }
 
     onMounted(() => {
       refreshUsers();

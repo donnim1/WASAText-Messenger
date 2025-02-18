@@ -70,12 +70,13 @@ type Conversation struct {
 }
 
 type Message struct {
-	ID             string
-	ConversationID string
-	SenderID       string
-	Content        string
-	ReplyTo        sql.NullString // If replies are optional
-	SentAt         string         // using string for simplicity; you may use time.Time
+	ID             string         `json:"ID"`
+	ConversationID string         `json:"ConversationID"`
+	SenderID       string         `json:"SenderID"`
+	Content        string         `json:"Content"`
+	ReplyTo        sql.NullString `json:"ReplyTo"`
+	SentAt         string         `json:"SentAt"`
+	Reactions      []string       `json:"reactions"` // New field for reactions
 }
 
 // GetConversationBetween looks for an existing conversation that includes both userID1 and userID2.
@@ -223,7 +224,7 @@ func (db *appdbimpl) ListUsers() ([]User, error) {
 func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Message, error) {
 	// Retrieve conversation details.
 	var conv Conversation
-	// Use sql.NullString for optional fields.
+	// Using sql.NullString for optional fields.
 	var name, groupPhoto sql.NullString
 	err := db.db.QueryRow(`
         SELECT id, name, is_group, created_at, group_photo 
@@ -236,7 +237,6 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 		return nil, nil, fmt.Errorf("failed to retrieve conversation: %w", err)
 	}
 
-	// Convert sql.NullString values.
 	if name.Valid {
 		conv.Name = name.String
 	} else {
@@ -269,8 +269,40 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 		messages = append(messages, msg)
 	}
 
-	if err = rows.Err(); err != nil {
-		return &conv, messages, fmt.Errorf("error iterating messages: %w", err)
+	// Retrieve reactions for all messages in one query if there are any messages.
+	if len(messages) > 0 {
+		// Build placeholder string for SQL IN clause.
+		placeholders := "?"
+		args := []interface{}{messages[0].ID}
+		for i := 1; i < len(messages); i++ {
+			placeholders += ",?"
+			args = append(args, messages[i].ID)
+		}
+
+		query := fmt.Sprintf("SELECT message_id, reaction FROM message_reactions WHERE message_id IN (%s)", placeholders)
+		reactionRows, err := db.db.Query(query, args...)
+		if err != nil {
+			return &conv, messages, fmt.Errorf("failed to retrieve reactions: %w", err)
+		}
+		defer reactionRows.Close()
+
+		reactionMapping := make(map[string][]string)
+		for reactionRows.Next() {
+			var messageID, reaction string
+			if err := reactionRows.Scan(&messageID, &reaction); err != nil {
+				return &conv, messages, fmt.Errorf("failed scanning reaction: %w", err)
+			}
+			reactionMapping[messageID] = append(reactionMapping[messageID], reaction)
+		}
+
+		// Attach reactions to each message.
+		for i, msg := range messages {
+			if reactions, exists := reactionMapping[msg.ID]; exists {
+				messages[i].Reactions = reactions
+			} else {
+				messages[i].Reactions = []string{}
+			}
+		}
 	}
 
 	return &conv, messages, nil
