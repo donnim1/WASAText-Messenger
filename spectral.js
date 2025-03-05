@@ -1,62 +1,32 @@
-// spectral.js
-// -----------------------------------------------------------------------------
-// This Source Code Form is subject to the terms of the Mozilla Public License,
-// v. 2.0. If a copy of the MPL was not distributed with this file, you can obtain
-// one at https://mozilla.org/MPL/2.0/.
-//
-// Author: ENDERZOMBI102 <enderzombi102.end@gmail.com> 2024
-// Description: Spectral configuration that redirects all output to a file (api.txt)
-//              in addition to printing it to the terminal.
-// -----------------------------------------------------------------------------
-
 import fs from 'fs';
 import path from 'path';
-
-// Instead of __dirname (which is not defined in ESM), we use process.cwd()
+const EOL = process.platform === 'win32' ? '\r\n' : '\n';
 const directory = process.cwd();
 const logFilePath = path.join(directory, 'api.txt');
-
-// Clear (or create) the log file at startup
 fs.writeFileSync(logFilePath, '', { flag: 'w' });
-
-// Override process.stdout.write so that all stdout is also saved in api.txt
-const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+const stripAnsi = str => str.replace(/\x1B\[[0-9;]*m/g, '');
+const origStdoutWrite = process.stdout.write.bind(process.stdout);
 process.stdout.write = (chunk, encoding, callback) => {
-  fs.appendFileSync(logFilePath, chunk);
-  return originalStdoutWrite(chunk, encoding, callback);
+  const text = typeof chunk === 'string' ? chunk : chunk.toString();
+  fs.appendFileSync(logFilePath, stripAnsi(text));
+  return origStdoutWrite(chunk, encoding, callback);
 };
-
-// Override process.stderr.write so that all stderr is also saved in api.txt
-const originalStderrWrite = process.stderr.write.bind(process.stderr);
+const origStderrWrite = process.stderr.write.bind(process.stderr);
 process.stderr.write = (chunk, encoding, callback) => {
-  fs.appendFileSync(logFilePath, chunk);
-  return originalStderrWrite(chunk, encoding, callback);
+  const text = typeof chunk === 'string' ? chunk : chunk.toString();
+  fs.appendFileSync(logFilePath, stripAnsi(text));
+  return origStderrWrite(chunk, encoding, callback);
 };
-
-// Also override common console methods (optional)
-console.log = (...args) => {
-  const message = args.join(' ') + "\n";
-  fs.appendFileSync(logFilePath, message);
-};
-console.error = (...args) => {
-  const message = args.join(' ') + "\n";
-  fs.appendFileSync(logFilePath, message);
-};
-console.warn = (...args) => {
-  const message = args.join(' ') + "\n";
-  fs.appendFileSync(logFilePath, message);
-};
-
+console.log = (...args) => fs.appendFileSync(logFilePath, stripAnsi(args.join(' ') + EOL));
+console.error = (...args) => fs.appendFileSync(logFilePath, stripAnsi(args.join(' ') + EOL));
+console.warn = (...args) => fs.appendFileSync(logFilePath, stripAnsi(args.join(' ') + EOL));
 import ibmCloudValidationRules from '@ibm-cloud/openapi-ruleset';
 import { allowedKeywords, propertyCasingConvention } from '@ibm-cloud/openapi-ruleset/src/functions';
 import { schemas } from '@ibm-cloud/openapi-ruleset-utilities/src/collections';
-
 console.log('Loaded config from spectral.js');
-
 export default {
   extends: ibmCloudValidationRules,
   rules: {
-    // Enforce allowed keywords (using "example" instead of deprecated "examples")
     'ibm-schema-keywords': {
       description: 'Disallows the use of certain keywords',
       message: '{{error}}',
@@ -105,7 +75,6 @@ export default {
         }
       }
     },
-    // Enforce camelCase for operation IDs
     'ibm-operationid-casing-convention': {
       description: 'Operation IDs must follow camel case',
       message: '{{error}}',
@@ -117,7 +86,6 @@ export default {
         functionOptions: { type: 'camel' }
       }
     },
-    // Enforce camelCase for property names
     'ibm-property-casing-convention': {
       description: 'Property names must follow camel case',
       message: '{{error}}',
@@ -132,7 +100,6 @@ export default {
     'ibm-property-consistent-name-and-type': 'warn',
     'ibm-request-and-response-content': 'error',
     'ibm-avoid-repeating-path-parameters': 'error',
-    // Rules turned off as they are not required for this project
     'ibm-integer-attributes': 'off',
     'ibm-schema-type-format': 'off',
     'ibm-no-array-responses': 'off',
@@ -155,3 +122,12 @@ export default {
     'ibm-enum-casing-convention': 'off'
   }
 };
+process.on('exit', () => {
+  const content = fs.readFileSync(logFilePath, 'utf8').trim();
+  if (process.exitCode && process.exitCode !== 0) {
+    origStderrWrite("\x1b[31m" + content + "\x1b[0m" + EOL);
+  } else {
+    const input = process.argv.find(a => /\.(ya?ml|json)$/.test(a)) || 'unknown file';
+    origStdoutWrite("\x1b[32mValidation results for " + input + " can be found " + logFilePath + "\x1b[0m" + EOL);
+  }
+});

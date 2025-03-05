@@ -10,7 +10,7 @@
       <div
         v-for="msg in messages"
         :key="msg.ID"
-        :class="['message-wrapper', { 'sent': msg.SenderID === currentUserId }]"
+        :class="['message-wrapper', { sent: msg.SenderID === currentUserId }]"
       >
         <div class="message-bubble">
           <!-- Heart overlay on top of message (like Instagram) -->
@@ -320,16 +320,18 @@ export default {
 </script>
 
 <style scoped>
+/* Main chat view container */
 .chat-view {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #f8f9fa;
+  background-color: #f1f2f5;
 }
 
+/* Header styling */
 .chat-header {
-  background-color: #ffffff;
-  border-bottom: 1px solid #e9ecef;
+  background-color: #fff;
+  border-bottom: 1px solid #e0e0e0;
   padding: 15px 20px;
   display: flex;
   align-items: center;
@@ -348,66 +350,130 @@ export default {
 }
 
 .back-button:hover {
-  background-color: #f8f9fa;
+  background-color: #f1f2f5;
 }
 
 .chat-header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   color: #212529;
 }
 
+/* Messages container styling */
 .chat-messages {
   flex: 1;
-  padding: 60px 20px 20px;
+  padding: 20px;
   overflow-y: auto;
-  background-color: #ffffff;
-  position: relative;
+  background-color: #f1f2f5;
 }
 
+/* Message wrapper with alignment based on sender */
 .message-wrapper {
+  display: flex;
   margin-bottom: 10px;
 }
 
+.message-wrapper.sent {
+  justify-content: flex-end;
+}
+
+.message-wrapper:not(.sent) {
+  justify-content: flex-start;
+}
+
+/* Message bubble styling for a modern look */
 .message-bubble {
   position: relative;
-  padding: 8px 12px;
-  border-radius: 16px;
+  padding: 12px 16px;
+  border-radius: 20px;
   max-width: 70%;
   word-wrap: break-word;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.sent .message-bubble {
+/* Different background for sent messages */
+.message-wrapper.sent .message-bubble {
   background-color: #dcf8c6;
-  align-self: flex-end;
 }
 
-.received .message-bubble {
-  background-color: #ffffff;
-  border: 1px solid #e0e0e0;
+/* Message content and timestamp */
+.message-content {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #333;
 }
 
+.message-timestamp {
+  display: block;
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 6px;
+  text-align: right;
+}
+
+/* Message actions styling */
 .message-actions {
   display: flex;
-  gap: 5px;
-  margin-top: 5px;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .message-actions button {
-  padding: 5px 10px;
+  padding: 4px 8px;
   font-size: 0.8rem;
   cursor: pointer;
+  background: none;
+  border: none;
+  color: #007bff;
 }
 
-/* Heart overlay (like Instagram) on top of the message */
+.message-actions button:hover {
+  text-decoration: underline;
+}
+
+/* Heart overlay on top of the message bubble */
 .heart-overlay {
   position: absolute;
-  top: 5px;
-  right: 5px;
-  font-size: 1.4rem;
+  top: -5px;
+  right: -5px;
+  background: #fff;
+  border-radius: 50%;
+  padding: 3px;
+  font-size: 1.2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   pointer-events: none;
+}
+
+/* Input area styling */
+.chat-input-container {
+  padding: 15px 20px;
+  background-color: #fff;
+  border-top: 1px solid #e0e0e0;
+}
+
+.chat-input-form {
+  display: flex;
+  gap: 10px;
+}
+
+.chat-input-form input {
+  flex: 1;
+  padding: 12px 15px;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  font-size: 1rem;
+}
+
+.chat-input-form button {
+  padding: 12px 24px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 1rem;
+  cursor: pointer;
 }
 
 /* Modal Styles */
@@ -425,125 +491,17 @@ export default {
 }
 
 .modal-content {
-  background: white;
+  background: #fff;
   border-radius: 12px;
   width: 90%;
   max-width: 480px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
+  padding: 20px;
 }
 
-.modal-header {
-  padding: 16px;
-  border-bottom: 1px solid #e0e0e0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #666;
-  cursor: pointer;
-}
-
-.modal-body {
-  padding: 16px;
-  overflow-y: auto;
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-
-.conversations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.conversation-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.conversation-item:hover {
-  background-color: #f5f5f5;
-}
-
-.conversation-avatar {
-  width: 40px;
-  height: 40px;
-}
-
-.avatar-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.conversation-info {
-  flex: 1;
-}
-
-.conversation-info h4 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.last-message {
-  margin: 4px 0 0;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.chat-input-container {
-  padding: 15px 20px;
-  background-color: #ffffff;
-  border-top: 1px solid #e9ecef;
-}
-
-.chat-input-form {
-  display: flex;
-  gap: 10px;
-}
-
-.chat-input-form input {
-  flex: 1;
-  padding: 12px 15px;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  font-size: 0.95rem;
-}
-
-.chat-input-form button {
-  padding: 12px 24px;
-  background-color: #4dabf7;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
+/* Chat error message */
 .chat-error {
   position: fixed;
   bottom: 20px;
@@ -554,15 +512,5 @@ export default {
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 0.9rem;
-}
-
-/* Long Press Directive */
-.message-bubble {
-  touch-action: none;
-}
-
-/* First message container spacing */
-.chat-messages > div:first-child .message-container {
-  margin-top: 10px;
 }
 </style>

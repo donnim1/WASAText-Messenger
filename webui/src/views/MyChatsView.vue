@@ -22,8 +22,6 @@
                 alt="Avatar"
                 class="avatar-image"
               />
-              <!-- Optionally, show an online-indicator for private chats -->
-              <span v-if="!conv.IsGroup" class="online-indicator"></span>
             </div>
             <div class="conversation-content">
               <div class="conversation-header">
@@ -69,6 +67,7 @@
                 :alt="user.username"
                 class="avatar-image"
               />
+              <span class="online-indicator" :class="{ 'online': user.isOnline }"></span>
             </div>
             <div class="contact-info">
               <h3 class="contact-name">{{ user.username }}</h3>
@@ -109,13 +108,26 @@ export default {
       }
     }
 
+    // Computed property to sort conversations by latest message timestamp (fallback to created_at)
+    const sortedConversations = computed(() => {
+      return conversations.value.slice().sort((a, b) => {
+        const tsA = new Date(a.last_message_sent_at || a.created_at);
+        const tsB = new Date(b.last_message_sent_at || b.created_at);
+        return tsB - tsA;
+      });
+    });
+
     async function loadUsers() {
       usersError.value = "";
       try {
         const response = await listUsers();
-        users.value = response.data.users.filter(
-          (u) => u.id !== currentUserID
-        );
+        users.value = response.data.users
+          .filter((u) => u.id !== currentUserID)
+          .map(user => ({
+            ...user,
+            isOnline: false // Default to offline
+            // You'll need to implement real online status tracking with your backend
+          }));
       } catch (err) {
         usersError.value = "Failed to load contacts";
         console.error(err);
@@ -181,7 +193,7 @@ export default {
     });
 
     return {
-      conversations,
+      conversations: sortedConversations, // use sortedConversations here
       conversationsError,
       users,
       usersError,
@@ -297,9 +309,13 @@ export default {
   right: 2px;
   width: 12px;
   height: 12px;
-  background-color: #40c057;
+  background-color: #adb5bd; /* Default offline color */
   border: 2px solid #ffffff;
   border-radius: 50%;
+}
+
+.online-indicator.online {
+  background-color: #40c057; /* Online color */
 }
 
 .conversation-content {
