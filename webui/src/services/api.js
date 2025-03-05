@@ -56,12 +56,12 @@ export function forwardMessage(messageId, targetConversationId) {
   return axios.post(`/messages/${messageId}/forward`, { targetConversationId });
 }
 
-export function commentMessage(messageId, reaction) {
+export async function commentMessage(messageId, reaction) {
   return axios.post(`/messages/${messageId}/comments`, { reaction });
 }
 
-export function uncommentMessage(messageId) {
-  return axios.delete(`/messages/${messageId}/uncomment`);
+export async function uncommentMessage(messageId) {
+  return axios.delete(`/messages/${messageId}/comments`);
 }
 
 export function deleteMessage(messageId) {
@@ -98,4 +98,22 @@ export function setGroupPhoto(groupId, payload) {
 
 export async function addUserToGroupByUsername(groupId, username) {
   return axios.post(`/groups/${groupId}/members`, { username });
+}
+
+export async function uploadImage(formData) {
+  return axios.post('/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+}
+
+/**
+ * Upload a new group photo.
+ * @param {string} groupId - The group's ID.
+ * @param {FormData} formData - FormData containing the photo file.
+ * @returns {Promise} - Axios response with the updated photo URL.
+ */
+export async function uploadGroupImage(groupId, formData) {
+  return axios.put(`/groups/${groupId}/photo`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 }

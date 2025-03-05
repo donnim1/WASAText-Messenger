@@ -3,8 +3,11 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/donnim1/WASAText/service/database"
@@ -271,10 +274,7 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httpr
 }
 
 // setGroupPhotoRequest defines the expected JSON payload for updating a group's photo.
-type setGroupPhotoRequest struct {
-	GroupID  string `json:"groupId"`
-	PhotoUrl string `json:"photoUrl"`
-}
+
 
 // setGroupPhoto handles PUT /groups/photo to update a group's photo.
 // convertDBConversationToConversation converts a database.Conversation to an API Conversation.
@@ -303,12 +303,60 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 		return
 	}
 
-	// Define a payload struct that only requires the photo URL.
+	// Attempt file upload: check if a file with key "photo" is included.
+	file, header, err := r.FormFile("photo")
+	if err == nil { // A file upload is happening.
+		defer file.Close()
+
+		// Create uploads directory if needed.
+		uploadDir := "uploads/"
+		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+			log.Printf("❌ Failed to create upload directory: %v", err)
+			http.Error(w, "Server error: cannot create upload directory", http.StatusInternalServerError)
+			return
+		}
+
+		// Construct the file path. You might want to prefix with a timestamp or groupID.
+		filePath := filepath.Join(uploadDir, header.Filename)
+		out, err := os.Create(filePath)
+		if err != nil {
+			log.Printf("❌ Failed to create file: %v", err)
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+		defer out.Close()
+
+		// Copy file contents.
+		if _, err := io.Copy(out, file); err != nil {
+			log.Printf("❌ Failed to write file: %v", err)
+			http.Error(w, "Failed to write file", http.StatusInternalServerError)
+			return
+		}
+
+		// Construct a new group photo URL.
+		// IMPORTANT: Derive the base URL dynamically in production.
+		photoUrl := fmt.Sprintf("http://localhost:3000/%s", filePath)
+		if err := rt.db.SetGroupPhoto(groupID, photoUrl); err != nil {
+			http.Error(w, "Failed to update group photo: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Respond with the newly updated photo URL.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]string{"photoUrl": photoUrl}); err != nil {
+			log.Printf("Error encoding JSON response: %v", err)
+		}
+		log.Println("✅ Group photo successfully updated (via file upload):", photoUrl)
+		return
+	}
+
+	// Fallback: try JSON-based photo URL update.
 	var payload struct {
 		PhotoUrl string `json:"photoUrl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 	if payload.PhotoUrl == "" {
@@ -316,7 +364,6 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 		return
 	}
 
-	// Update the group photo using the group ID from the URL.
 	if err := rt.db.SetGroupPhoto(groupID, payload.PhotoUrl); err != nil {
 		http.Error(w, "Failed to update group photo: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -324,7 +371,8 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{"message": "Group photo updated successfully"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{"photoUrl": payload.PhotoUrl}); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+	log.Println("✅ Group photo successfully updated (via URL):", payload.PhotoUrl)
 }

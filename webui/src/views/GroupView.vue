@@ -9,7 +9,6 @@
             Create New Group
           </button>
         </div>
-
         <div class="groups-list">
           <div v-if="groups.length === 0" class="empty-state">
             <div class="empty-icon">👥</div>
@@ -17,14 +16,10 @@
             <p>Create a new group to get started</p>
           </div>
           <div v-else class="group-items">
-            <div
-              v-for="group in groups"
-              :key="group.id"
-              class="group-item"
-            >
+            <div v-for="group in groups" :key="group.id" class="group-item">
               <div class="group-avatar">
                 <img
-                  :src="group.photoUrl || defaultGroupPhoto"
+                  :src="group.photoUrl ? group.photoUrl : defaultGroupPhoto"
                   :alt="group.name"
                   class="avatar-image"
                 />
@@ -44,13 +39,12 @@
                     </button>
                   </div>
                 </div>
-                <p class="group-members">{{ group.memberCount || 0 }} members</p>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            </div> <!-- end group-item -->
+          </div> <!-- end group-items -->
+        </div> <!-- end groups-list -->
+      </div> <!-- end groups-panel -->
+    </div> <!-- end groups-container -->
 
     <!-- Create Group Modal -->
     <div class="modal" v-if="showCreateGroupModal">
@@ -110,13 +104,18 @@
             />
           </div>
           <div class="form-group">
-            <label for="update-photo">Group Photo URL</label>
+            <!-- Replace text input with a file input -->
+            <label for="update-photo-upload">Group Photo</label>
             <input
-              id="update-photo"
-              v-model="updateGroupPhoto"
-              type="text"
-              placeholder="Enter new photo URL (optional)"
+              id="update-photo-upload"
+              type="file"
+              accept="image/*"
+              @change="handleUpdateGroupPhotoUpload"
             />
+            <!-- Optionally display the current photo URL -->
+            <div v-if="updateGroupPhoto">
+              <img :src="updateGroupPhoto" alt="Group Photo" class="avatar-image" />
+            </div>
           </div>
           <div class="modal-actions">
             <button type="button" class="cancel-button" @click="closeUpdateModal">
@@ -154,7 +153,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import {
   createGroup,
   addUserToGroupByUsername,
@@ -163,11 +162,13 @@ import {
   listUsers,
   setGroupName,
   setGroupPhoto,
+  uploadGroupImage,
 } from "@/services/api.js";
 
 export default {
   name: "GroupManagement",
   setup() {
+    // Reactive state
     const groupName = ref("");
     const groupPhoto = ref("");
     const groups = ref([]);
@@ -176,12 +177,13 @@ export default {
     const defaultGroupPhoto = ref("https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg");
     const showCreateGroupModal = ref(false);
     const showUpdateModal = ref(false);
-    // NEW: Add reactive state for the add user modal and available users.
     const showAddUserModal = ref(false);
     const availableUsers = ref([]);
     const selectedGroup = ref(null);
     const updateGroupName = ref("");
     const updateGroupPhoto = ref("");
+
+    let refreshInterval = null;
 
     async function createGroupHandler() {
       message.value = "";
@@ -195,7 +197,8 @@ export default {
         groupName.value = "";
         groupPhoto.value = "";
         showCreateGroupModal.value = false;
-        refreshGroups();
+        // Refresh groups after creation
+        await refreshGroups();
       } catch (err) {
         error.value = "Failed to create group";
         console.error(err);
@@ -205,7 +208,10 @@ export default {
     async function refreshGroups() {
       try {
         const response = await listUserGroups();
-        groups.value = response.data.groups || [];
+        groups.value = (response.data.groups || []).map(group => ({
+          ...group,
+          photoUrl: group.group_photo || ""  // Map group_photo to photoUrl
+        }));
       } catch (err) {
         error.value = "Failed to load groups";
         console.error(err);
@@ -219,14 +225,13 @@ export default {
       try {
         await leaveGroup(groupId);
         message.value = "Left group successfully";
-        refreshGroups();
+        await refreshGroups();
       } catch (err) {
         error.value = "Failed to leave group";
         console.error(err);
       }
     }
 
-    // NEW: Replace promptAddUser with an open modal method.
     async function openAddUserModal(groupId) {
       message.value = "";
       error.value = "";
@@ -241,7 +246,6 @@ export default {
       }
     }
 
-    // NEW: When a user is selected from the modal
     async function addUser(user) {
       message.value = "";
       error.value = "";
@@ -249,7 +253,7 @@ export default {
         await addUserToGroupByUsername(selectedGroup.value.id, user.username);
         message.value = `User ${user.username} added successfully`;
         showAddUserModal.value = false;
-        refreshGroups();
+        await refreshGroups();
       } catch (err) {
         error.value = "Failed to add user to group";
         console.error(err);
@@ -263,9 +267,27 @@ export default {
     function openUpdateGroupModal(group) {
       selectedGroup.value = group;
       updateGroupName.value = group.name;
-      // Change here: use photoURL instead of photo.
-      updateGroupPhoto.value = group.photoUrl|| "";
+      updateGroupPhoto.value = group.photoUrl || "";
       showUpdateModal.value = true;
+    }
+
+    // Handler for file upload in update group modal
+    async function handleUpdateGroupPhotoUpload(event) {
+      const file = event.target.files[0];
+      if (!file || !selectedGroup.value || !selectedGroup.value.id) return;
+      
+      const formData = new FormData();
+      formData.append("photo", file);
+      
+      try {
+        const response = await uploadGroupImage(selectedGroup.value.id, formData);
+        // Assume the response contains the new photo URL in response.data.photoUrl.
+        updateGroupPhoto.value = response.data.photoUrl;
+        message.value = "Group photo updated successfully";
+      } catch (err) {
+        error.value = "Failed to upload group photo";
+        console.error(err);
+      }
     }
 
     async function updateGroupHandler() {
@@ -278,7 +300,7 @@ export default {
         }
         message.value = "Group updated successfully";
         showUpdateModal.value = false;
-        refreshGroups();
+        await refreshGroups();
       } catch (err) {
         error.value = "Failed to update group";
         console.error(err);
@@ -289,8 +311,16 @@ export default {
       showUpdateModal.value = false;
     }
 
+    // Auto-refresh every 1 second.
     onMounted(() => {
       refreshGroups();
+      refreshInterval = setInterval(refreshGroups, 1000);
+    });
+
+    onUnmounted(() => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
     });
 
     return {
@@ -303,7 +333,6 @@ export default {
       showCreateGroupModal,
       createGroupHandler,
       leaveGroupHandler,
-      // Replace promptAddUser with openAddUserModal
       openAddUserModal,
       refreshGroups,
       showUpdateModal,
@@ -312,11 +341,11 @@ export default {
       openUpdateGroupModal,
       updateGroupHandler,
       closeUpdateModal,
-      // NEW:
       showAddUserModal,
       availableUsers,
       addUser,
       closeAddUserModal,
+      handleUpdateGroupPhotoUpload,
     };
   },
 };
@@ -429,11 +458,7 @@ export default {
   color: #212529;
 }
 
-.group-members {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #6c757d;
-}
+
 
 .group-actions {
   display: flex;

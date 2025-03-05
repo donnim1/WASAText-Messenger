@@ -27,6 +27,7 @@
             <button class="heart-button" @click="toggleHeart(msg)">❤️</button>
             <!-- Only allow delete if it's your message -->
             <button v-if="msg.SenderID === currentUserId" @click="deleteMessage(msg.ID)">Delete</button>
+            <button @click="replyTo(msg)">Reply</button>
           </div>
         </div>
       </div>
@@ -35,6 +36,16 @@
     <!-- Input Area -->
     <div class="chat-input-container">
       <form @submit.prevent="sendMessageHandler" class="chat-input-form">
+        <label for="image-upload" class="image-upload-button">
+          <i class="fas fa-image"></i>
+        </label>
+        <input 
+          id="image-upload" 
+          type="file" 
+          accept="image/*" 
+          style="display: none" 
+          @change="handleImageUpload"
+        />
         <input v-model="newMessage" placeholder="Type a message..." required />
         <button type="submit">Send</button>
       </form>
@@ -54,11 +65,19 @@
     <div v-if="chatError" class="chat-error">
       {{ chatError }}
     </div>
+
+    <!-- Add reply UI -->
+    <div v-if="replyingTo" class="reply-container">
+      <div class="reply-preview">
+        <p>Replying to: {{ replyingTo.Content }}</p>
+        <button @click="cancelReply">✕</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch, computed, nextTick } from "vue";
+import { ref, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   getConversation,
@@ -68,6 +87,7 @@ import {
   commentMessage as commentMessageApi,
   uncommentMessage as uncommentMessageApi,
   deleteMessage as deleteMessageApi,
+  uploadImage
 } from "@/services/api.js";
 
 export default {
@@ -104,6 +124,8 @@ export default {
     });
 
     const conversationTitle = computed(() => receiverName.value || "Chat");
+
+    const replyingTo = ref(null);
 
     async function toggleHeart(message) {
       try {
@@ -213,9 +235,16 @@ export default {
         receiverId: receiverId.value,
         content: newMessage.value,
       };
+      
+      // Add reply reference if replying
+      if (replyingTo.value) {
+        payload.replyTo = replyingTo.value.ID;
+      }
+      
       try {
         const response = await sendMessage(payload);
         newMessage.value = "";
+        replyingTo.value = null; // Clear reply state
         if (!conversationId.value && response.data.conversationId) {
           conversationId.value = response.data.conversationId;
           router.replace({
@@ -227,6 +256,33 @@ export default {
       } catch (err) {
         console.error("Error sending message:", err);
         chatError.value = "Failed to send message";
+      }
+    }
+
+    async function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      try {
+        const response = await uploadImage(formData);
+        const imageUrl = response.data.url;
+        
+        // Send as special message with image URL
+        const payload = {
+          conversationId: conversationId.value,
+          receiverId: receiverId.value,
+          content: `[Image](${imageUrl})`,
+          isImage: true
+        };
+        
+        await sendMessage(payload);
+        await loadConversationMessages(conversationId.value);
+      } catch (err) {
+        chatError.value = "Failed to upload image";
+        console.error(err);
       }
     }
 
@@ -242,8 +298,36 @@ export default {
       router.back();
     }
 
+    function replyTo(message) {
+      replyingTo.value = message;
+    }
+
+    function cancelReply() {
+      replyingTo.value = null;
+    }
+
+    let messagePollingInterval;
+
+    function startMessagePolling() {
+      // Poll every 5 seconds
+      messagePollingInterval = setInterval(async () => {
+        if (conversationId.value) {
+          await loadConversationMessages(conversationId.value);
+        }
+      }, 5000);
+    }
+
+    function stopMessagePolling() {
+      clearInterval(messagePollingInterval);
+    }
+
     onMounted(() => {
       initializeChat();
+      startMessagePolling();
+    });
+
+    onUnmounted(() => {
+      stopMessagePolling();
     });
 
     watch(
@@ -277,12 +361,20 @@ export default {
     }
 
     const confirmForwardMessage = async () => {
+      if (!messageToForward.value || !forwardTargetConversationId.value) {
+        chatError.value = "Missing required information";
+        return;
+      }
+      
       try {
-        // Note: Adjust as needed if selectedMessageId changes in your logic.
-        await forwardMessageApi(selectedMessageId.value, forwardTargetConversationId.value);
-        chatError.value = "";
+        await forwardMessageApi(
+          messageToForward.value.ID, 
+          forwardTargetConversationId.value
+        );
         showForwardModal.value = false;
         forwardTargetConversationId.value = '';
+        messageToForward.value = null;
+        chatError.value = "Message forwarded successfully";
         await loadConversationMessages(conversationId.value);
       } catch (error) {
         console.error("Forward Message Error:", error);
@@ -314,6 +406,10 @@ export default {
       toggleHeart,
       confirmForwardMessage,
       closeForwardModal,
+      handleImageUpload,
+      replyingTo,
+      replyTo,
+      cancelReply
     };
   },
 };

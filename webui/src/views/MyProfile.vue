@@ -89,7 +89,7 @@ export default {
           newUsername.value = "";
         })
         .catch(() => {
-          error.value = "Failed to update username.";
+          error.value = "Username Already exists.";
         });
     }
 
