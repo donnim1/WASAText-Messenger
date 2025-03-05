@@ -60,8 +60,14 @@ export async function commentMessage(messageId, reaction) {
   return axios.post(`/messages/${messageId}/comments`, { reaction });
 }
 
+/**
+ * Remove a reaction (uncomment) from a message.
+ * Updated to call the correct endpoint.
+ * @param {string} messageId - The ID of the message.
+ * @returns {Promise} Axios promise.
+ */
 export async function uncommentMessage(messageId) {
-  return axios.delete(`/messages/${messageId}/comments`);
+  return axios.delete(`/messages/${messageId}/uncomment`);
 }
 
 export function deleteMessage(messageId) {

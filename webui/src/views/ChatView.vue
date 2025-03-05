@@ -133,15 +133,18 @@ export default {
         // Check if the message already has a heart reaction.
         const hasHeart = message.reactions && message.reactions.includes(heart);
         if (hasHeart) {
-          // Remove the heart reaction.
+          // Remove the heart reaction using the DELETE endpoint.
           await uncommentMessageApi(message.ID);
           message.reactions = message.reactions.filter(r => r !== heart);
         } else {
           // Add the heart reaction.
           await commentMessageApi(message.ID, heart);
-          if (!message.reactions) message.reactions = [];
+          if (!message.reactions) {
+            message.reactions = [];
+          }
           message.reactions.push(heart);
         }
+        // Refresh the messages to update the UI.
         await loadConversationMessages(conversationId.value);
       } catch (err) {
         chatError.value = "Failed to toggle heart reaction";

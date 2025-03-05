@@ -81,7 +81,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { getMyConversations, listUsers, getConversationByReceiver } from "@/services/api.js";
 import { useRouter } from "vue-router";
 
@@ -96,6 +96,7 @@ export default {
     const router = useRouter();
     const currentUserID = localStorage.getItem("userID");
     const defaultPhoto = "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
+    let refreshInterval = null;
 
     async function loadConversations() {
       conversationsError.value = "";
@@ -108,25 +109,15 @@ export default {
       }
     }
 
-    // Computed property to sort conversations by latest message timestamp (fallback to created_at)
-    const sortedConversations = computed(() => {
-      return conversations.value.slice().sort((a, b) => {
-        const tsA = new Date(a.last_message_sent_at || a.created_at);
-        const tsB = new Date(b.last_message_sent_at || b.created_at);
-        return tsB - tsA;
-      });
-    });
-
     async function loadUsers() {
       usersError.value = "";
       try {
         const response = await listUsers();
         users.value = response.data.users
           .filter((u) => u.id !== currentUserID)
-          .map(user => ({
+          .map((user) => ({
             ...user,
-            isOnline: false // Default to offline
-            // You'll need to implement real online status tracking with your backend
+            isOnline: false // Default to offline; replace with real online status when available.
           }));
       } catch (err) {
         usersError.value = "Failed to load contacts";
@@ -134,12 +125,13 @@ export default {
       }
     }
 
-    const filteredUsers = computed(() => {
-      if (!userSearchQuery.value) return users.value;
-      const query = userSearchQuery.value.toLowerCase();
-      return users.value.filter((user) =>
-        user.username.toLowerCase().includes(query)
-      );
+    // Computed property to sort conversations by latest message timestamp (fallback to created_at)
+    const sortedConversations = computed(() => {
+      return conversations.value.slice().sort((a, b) => {
+        const tsA = new Date(a.last_message_sent_at || a.created_at);
+        const tsB = new Date(b.last_message_sent_at || b.created_at);
+        return tsB - tsA;
+      });
     });
 
     function openConversation(conv) {
@@ -157,11 +149,11 @@ export default {
         })
         .catch(error => {
           if (error.response && error.response.status === 404) {
-            // If conversation doesn't exist, navigate with receiver's ID to start a new string
+            // If conversation doesn't exist, navigate with receiver's ID to start a new conversation
             router.push({
               name: "ChatView",
               params: { conversationId: "" },
-              query: { receiverId: user.id, receiverName: user.name }
+              query: { receiverId: user.id, receiverName: user.username }
             });
           } else {
             console.error("Error checking conversation:", error);
@@ -188,8 +180,21 @@ export default {
     }
 
     onMounted(() => {
+      // Initial data load
       loadConversations();
       loadUsers();
+
+      // Auto-refresh every 1 second
+      refreshInterval = setInterval(() => {
+        loadConversations();
+        loadUsers();
+      }, 1000);
+    });
+
+    onUnmounted(() => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
     });
 
     return {
@@ -198,7 +203,6 @@ export default {
       users,
       usersError,
       userSearchQuery,
-      filteredUsers,
       openConversation,
       openChatWithUser,
       formatTimestamp,
