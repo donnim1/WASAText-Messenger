@@ -17,7 +17,13 @@
           <div class="heart-overlay" v-if="msg.reactions && msg.reactions.includes('❤️')">
             ❤️
           </div>
-          <p class="message-content">{{ msg.Content }}</p>
+          <!-- Render image if content is recognized as an image URL -->
+          <div v-if="isImage(msg.Content)">
+            <img :src="msg.Content" alt="Image message" class="sent-image" />
+          </div>
+          <div v-else>
+            <p class="message-content">{{ msg.Content }}</p>
+          </div>
           <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
 
           <!-- Message Actions -->
@@ -265,30 +271,31 @@ export default {
     async function handleImageUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
-      
-      const formData = new FormData();
-      formData.append('image', file);
-      
-      try {
-        const response = await uploadImage(formData);
-        const imageUrl = response.data.url;
-        
-        // Send as special message with image URL
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const imageUrl = e.target.result; // Base64 encoded data URL
+
         const payload = {
           conversationId: conversationId.value,
           receiverId: receiverId.value,
-          content: `[Image](${imageUrl})`,
-          isImage: true
+          content: imageUrl,
+          isGroup: false, // Adjust based on chat type if necessary
+          groupId: ""     // Adjust if it's a group chat
         };
-        
-        await sendMessage(payload);
-        await loadConversationMessages(conversationId.value);
-      } catch (err) {
-        chatError.value = "Failed to upload image";
-        console.error(err);
-      }
-    }
 
+        try {
+          await sendMessage(payload);
+          await loadConversationMessages(conversationId.value);
+        } catch (err) {
+          chatError.value = "Failed to send image message";
+          console.error("Image message error:", err);
+        }
+      };
+
+      reader.readAsDataURL(file);
+    }
+    
     async function initializeChat() {
       if (conversationId.value) {
         await loadConversationMessages(conversationId.value);
@@ -317,7 +324,7 @@ export default {
         if (conversationId.value) {
           await loadConversationMessages(conversationId.value);
         }
-      }, 5000);
+      }, 1000);
     }
 
     function stopMessagePolling() {
@@ -385,6 +392,17 @@ export default {
       }
     };
 
+    const isImage = (content) => {
+      if (!content) return false;
+      // Check for Base64 URL starting with "data:image/"
+      if (content.startsWith("data:image/")) return true;
+
+      // Otherwise, test for normal HTTP/HTTPS image URL based on common extensions.
+      const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
+      const pattern = new RegExp(`https?://.*\\.(${imageExtensions.join("|")})(\\?.*)?$`, "i");
+      return pattern.test(content);
+    };
+
     return {
       conversationTitle,
       messages,
@@ -403,16 +421,16 @@ export default {
       filteredConversations,
       defaultPhoto,
       showForwardDialog,
-      closeForwardDialog: closeForwardModal,
+      closeForwardModal,
       forwardMessage,
       deleteMessage,
       toggleHeart,
       confirmForwardMessage,
-      closeForwardModal,
       handleImageUpload,
       replyingTo,
       replyTo,
-      cancelReply
+      cancelReply,
+      isImage // <-- Added here
     };
   },
 };
