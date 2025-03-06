@@ -678,7 +678,7 @@ func (db *appdbimpl) CommentMessage(messageID, userID, reaction string) error {
 // UncommentMessage removes a reaction (comment) for a message from the message_reactions table.
 func (db *appdbimpl) UncommentMessage(messageID, userID string) error {
 	log.Printf("Deleting reaction for message %s, user %s", messageID, userID)
-	
+
 	query := "DELETE FROM message_reactions WHERE message_id = ? AND user_id = ?"
 	result, err := db.db.Exec(query, messageID, userID)
 	if err != nil {

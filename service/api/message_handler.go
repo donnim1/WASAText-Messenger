@@ -14,8 +14,8 @@ type MessageRequest struct {
 	ReceiverID     string `json:"receiverId"`     // Ensure uppercase "ID"
 	Content        string `json:"content"`
 	IsGroup        bool   `json:"isGroup"`
-	GroupID        string `json:"groupId"` // Ensure uppercase "ID"
-	ReplyTo		string `json:"replyTo,omitempty"` // Add this field
+	GroupID        string `json:"groupId"`           // Ensure uppercase "ID"
+	ReplyTo        string `json:"replyTo,omitempty"` // Add this field
 }
 
 // MessageResponse defines the response format.
@@ -89,14 +89,12 @@ func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps htt
 		return
 	}
 
-	// Decode the request body.
 	var req forwardMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
 
-	// Forward the message.
 	newMessageID, err := rt.db.ForwardMessage(originalMessageID, req.TargetConversationID, userID)
 	if err != nil {
 		http.Error(w, "Failed to forward message: "+err.Error(), http.StatusInternalServerError)
@@ -105,9 +103,7 @@ func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps htt
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{"messageId": newMessageID}); err != nil {
-		log.Printf("Error encoding response: %v", err)
-	}
+	json.NewEncoder(w).Encode(map[string]string{"messageId": newMessageID})
 }
 
 // commentMessageRequest defines the payload for commenting (reacting) on a message.

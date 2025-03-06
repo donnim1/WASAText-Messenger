@@ -125,13 +125,13 @@ export default {
       }
     }
 
-    // Computed property to sort conversations by latest message timestamp (fallback to created_at)
-    const sortedConversations = computed(() => {
-      return conversations.value.slice().sort((a, b) => {
-        const tsA = new Date(a.last_message_sent_at || a.created_at);
-        const tsB = new Date(b.last_message_sent_at || b.created_at);
-        return tsB - tsA;
-      });
+    // Define filteredUsers computed property for contacts filtering
+    const filteredUsers = computed(() => {
+      if (!userSearchQuery.value) return users.value;
+      const query = userSearchQuery.value.toLowerCase();
+      return users.value.filter(user =>
+        user.username.toLowerCase().includes(query)
+      );
     });
 
     function openConversation(conv) {
@@ -198,11 +198,16 @@ export default {
     });
 
     return {
-      conversations: sortedConversations, // use sortedConversations here
+      conversations: computed(() => conversations.value.slice().sort((a, b) => {
+        const tsA = new Date(a.last_message_sent_at || a.created_at);
+        const tsB = new Date(b.last_message_sent_at || b.created_at);
+        return tsB - tsA;
+      })),
       conversationsError,
       users,
       usersError,
       userSearchQuery,
+      filteredUsers,
       openConversation,
       openChatWithUser,
       formatTimestamp,

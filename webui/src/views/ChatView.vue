@@ -188,23 +188,40 @@ export default {
     async function toggleHeart(message) {
       try {
         const heart = "❤️";
-        // Retrieve the current user's ID from localStorage.
+        // Get current user's ID
         const currentUserId = localStorage.getItem("userID");
-        // Check if the current user already reacted with a heart.
-        const hasHeart =
-          message.reactions &&
-          message.reactions.some(
-            (r) => r.Reaction === heart && r.UserID === currentUserId
-          );
-
-        if (hasHeart) {
-          // Remove the reaction.
-          await uncommentMessageApi(message.ID, heart);
-        } else {
-          // Add the reaction.
-          await commentMessageApi(message.ID, heart);
+        
+        console.log("Toggle heart for message:", message.ID);
+        console.log("Current user ID:", currentUserId);
+        
+        if (message.reactions) {
+          console.log("All reactions on this message:", message.reactions);
         }
-        // Refresh messages from backend.
+        
+        // Fix: Use lowercase property names to match the actual data structure
+        const hasHeart = message.reactions && 
+                        message.reactions.some(r => {
+                          console.log("Checking reaction:", r);
+                          console.log("r.userID:", r.userID, "currentUserId:", currentUserId);
+                          console.log("Are they equal?", r.userID === currentUserId);
+                          console.log("r.reaction:", r.reaction, "heart:", heart);
+                          console.log("Are they equal?", r.reaction === heart);
+                          return r.userID === currentUserId && r.reaction === heart;
+                        });
+        
+        console.log("Has heart reaction?", hasHeart);
+        
+        if (hasHeart) {
+          console.log("REMOVING reaction for message:", message.ID);
+          const result = await uncommentMessageApi(message.ID);
+          console.log("Uncomment result:", result);
+        } else {
+          console.log("ADDING reaction for message:", message.ID);
+          const result = await commentMessageApi(message.ID, heart);
+          console.log("Comment result:", result);
+        }
+        
+        // Refresh messages from backend
         await loadConversationMessages(conversationId.value);
       } catch (err) {
         chatError.value = "Failed to toggle heart reaction";
@@ -311,13 +328,27 @@ export default {
         content: newMessage.value,
         isGroup: false,
         groupId: "",
-        replyTo: replyingTo.value ? replyingTo.value.ID : ""  // replyTo is set only when replying
+        replyTo: replyingTo.value ? replyingTo.value.ID : ""
       };
 
       try {
-        await sendMessage(payload);
+        const response = await sendMessage(payload);
+        
+        // If this is a new conversation, update the conversationId
+        if (!conversationId.value && response.data && response.data.conversationId) {
+          conversationId.value = response.data.conversationId;
+          
+          // Update URL without reloading the page
+          router.replace({
+            name: 'ChatView',
+            params: { conversationId: response.data.conversationId }
+          }, { replace: true });
+        }
+        
         newMessage.value = "";
         replyingTo.value = null; // clear reply state after sending
+        
+        // Load messages with the updated conversationId
         await loadConversationMessages(conversationId.value);
       } catch (err) {
         console.error("Error sending message:", err);
