@@ -26,7 +26,7 @@ type AppDatabase interface {
 	GetConversationsByUserID(userID string) ([]Conversation, error)
 	GetConversation(conversationID string) (*Conversation, []Message, error)
 
-	SendMessage(senderID, receiverID, content string, isGroup bool, groupID, conversationID string) (string, string, error)
+	SendMessage(senderID, receiverID, content string, isGroup bool, groupID, conversationID string, replyTo string) (string, string, error)
 	ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error)
 	CommentMessage(messageID, userID, reaction string) error
 	UncommentMessage(messageID, userID string) error
@@ -70,13 +70,19 @@ type Conversation struct {
 }
 
 type Message struct {
-	ID             string         `json:"ID"`
-	ConversationID string         `json:"ConversationID"`
-	SenderID       string         `json:"SenderID"`
-	Content        string         `json:"Content"`
-	ReplyTo        sql.NullString `json:"ReplyTo"`
-	SentAt         string         `json:"SentAt"`
-	Reactions      []string       `json:"reactions"` // New field for reactions
+	ID             string     `json:"ID"`
+	ConversationID string     `json:"ConversationID"`
+	SenderID       string     `json:"SenderID"`
+	Content        string     `json:"Content"`
+	ReplyTo        string     `json:"ReplyTo,omitempty"` // Changed to string
+	SentAt         string     `json:"SentAt"`
+	Reactions      []Reaction `json:"reactions"` // New field for reactions
+}
+
+type Reaction struct {
+	Reaction string `json:"reaction"`
+	UserName string `json:"userName"`
+	UserID   string `json:"userID"`
 }
 
 // GetConversationBetween looks for an existing conversation that includes both userID1 and userID2.
@@ -250,21 +256,27 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 	}
 
 	// Retrieve messages for this conversation.
+	var messages []Message
 	rows, err := db.db.Query(`
-        SELECT id, conversation_id, sender_id, content, reply_to, sent_at 
-        FROM messages 
-        WHERE conversation_id = ? 
-        ORDER BY sent_at ASC`, conversationID)
+	SELECT id, conversation_id, sender_id, content, reply_to, sent_at 
+	FROM messages 
+	WHERE conversation_id = ? 
+	ORDER BY sent_at ASC`, conversationID)
 	if err != nil {
-		return &conv, nil, fmt.Errorf("failed to retrieve messages: %w", err)
+		return &conv, messages, fmt.Errorf("failed to query messages: %w", err)
 	}
 	defer rows.Close()
 
-	var messages []Message
 	for rows.Next() {
 		var msg Message
-		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.ReplyTo, &msg.SentAt); err != nil {
+		var replyTo sql.NullString
+		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &replyTo, &msg.SentAt); err != nil {
 			return &conv, messages, fmt.Errorf("failed to scan message: %w", err)
+		}
+		if replyTo.Valid {
+			msg.ReplyTo = replyTo.String
+		} else {
+			msg.ReplyTo = ""
 		}
 		messages = append(messages, msg)
 	}
@@ -279,28 +291,37 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 			args = append(args, messages[i].ID)
 		}
 
-		query := fmt.Sprintf("SELECT message_id, reaction FROM message_reactions WHERE message_id IN (%s)", placeholders)
-		reactionRows, err := db.db.Query(query, args...)
+		// Query reactions for all message IDs and join to retrieve the username.
+		reactionRows, err := db.db.Query(
+			"SELECT mr.message_id, mr.reaction, u.id, u.username FROM message_reactions mr JOIN users u ON mr.user_id = u.id WHERE mr.message_id IN ("+placeholders+")",
+			args...,
+		)
 		if err != nil {
-			return &conv, messages, fmt.Errorf("failed to retrieve reactions: %w", err)
+			return &conv, messages, fmt.Errorf("failed to query reactions: %w", err)
 		}
 		defer reactionRows.Close()
 
-		reactionMapping := make(map[string][]string)
+		// Build a mapping from message ID to a slice of reaction objects.
+		reactionsMap := make(map[string][]Reaction)
 		for reactionRows.Next() {
-			var messageID, reaction string
-			if err := reactionRows.Scan(&messageID, &reaction); err != nil {
-				return &conv, messages, fmt.Errorf("failed scanning reaction: %w", err)
+			var messageID, reaction, userID, userName string
+			if err := reactionRows.Scan(&messageID, &reaction, &userID, &userName); err != nil {
+				return &conv, messages, fmt.Errorf("failed to scan reaction: %w", err)
 			}
-			reactionMapping[messageID] = append(reactionMapping[messageID], reaction)
+			reactionsMap[messageID] = append(reactionsMap[messageID], Reaction{
+				Reaction: reaction,
+				UserID:   userID,
+				UserName: userName,
+			})
 		}
 
 		// Attach reactions to each message.
 		for i, msg := range messages {
-			if reactions, exists := reactionMapping[msg.ID]; exists {
-				messages[i].Reactions = reactions
+			if r, ok := reactionsMap[msg.ID]; ok {
+				// Make sure Message.Reactions is defined to accept these reaction objects.
+				messages[i].Reactions = r
 			} else {
-				messages[i].Reactions = []string{}
+				messages[i].Reactions = []Reaction{}
 			}
 		}
 	}
@@ -544,11 +565,10 @@ func (db *appdbimpl) GetConversationsByUserID(userID string) ([]Conversation, er
 
 // SendMessage inserts a new message and returns the generated messageID and conversationID.
 // If conversationID is empty, creates a new conversation for the users.
-func (db *appdbimpl) SendMessage(userID, receiverID, content string, isGroup bool, groupID, conversationID string) (string, string, error) {
+func (db *appdbimpl) SendMessage(userID, receiverID, content string, isGroup bool, groupID, conversationID, replyTo string) (string, string, error) {
 	// For private messages, check if a conversation already exists.
 	if !isGroup {
 		if conversationID == "" {
-			// Attempt to fetch an existing conversation between userID and receiverID.
 			existingConv, err := db.GetPrivateConversation(userID, receiverID)
 			if err != nil {
 				return "", "", fmt.Errorf("error checking for existing conversation: %w", err)
@@ -556,7 +576,6 @@ func (db *appdbimpl) SendMessage(userID, receiverID, content string, isGroup boo
 			if existingConv != nil {
 				conversationID = existingConv.ID
 			} else {
-				// No conversation exists, create a new one.
 				conversationID, err = db.createConversation(userID, receiverID)
 				if err != nil {
 					return "", "", fmt.Errorf("failed to create conversation: %w", err)
@@ -565,7 +584,6 @@ func (db *appdbimpl) SendMessage(userID, receiverID, content string, isGroup boo
 		}
 	}
 
-	// Generate a new unique message ID.
 	newMessageID, err := GenerateNewID()
 	if err != nil {
 		return "", "", fmt.Errorf("GenerateNewID error: %w", err)
@@ -573,9 +591,9 @@ func (db *appdbimpl) SendMessage(userID, receiverID, content string, isGroup boo
 
 	currentTime := time.Now().UTC().Format(time.RFC3339)
 
-	// Insert the new message into the messages table.
-	query := `INSERT INTO messages (id, conversation_id, sender_id, content, sent_at) VALUES (?, ?, ?, ?, ?)`
-	result, err := db.db.Exec(query, newMessageID, conversationID, userID, content, currentTime)
+	// Updated query to include reply_to column.
+	query := `INSERT INTO messages (id, conversation_id, sender_id, content, reply_to, sent_at) VALUES (?, ?, ?, ?, ?, ?)`
+	result, err := db.db.Exec(query, newMessageID, conversationID, userID, content, replyTo, currentTime)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to insert message, query error: %w", err)
 	}
@@ -659,12 +677,19 @@ func (db *appdbimpl) CommentMessage(messageID, userID, reaction string) error {
 
 // UncommentMessage removes a reaction (comment) for a message from the message_reactions table.
 func (db *appdbimpl) UncommentMessage(messageID, userID string) error {
-	_, err := db.db.Exec(
-		"DELETE FROM message_reactions WHERE message_id = ? AND user_id = ?",
-		messageID, userID,
-	)
+	log.Printf("Deleting reaction for message %s, user %s", messageID, userID)
+	
+	query := "DELETE FROM message_reactions WHERE message_id = ? AND user_id = ?"
+	result, err := db.db.Exec(query, messageID, userID)
 	if err != nil {
-		return fmt.Errorf("failed to remove comment: %w", err)
+		return fmt.Errorf("failed to delete reaction: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check deletion: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("reaction not found")
 	}
 	return nil
 }

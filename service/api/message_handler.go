@@ -15,6 +15,7 @@ type MessageRequest struct {
 	Content        string `json:"content"`
 	IsGroup        bool   `json:"isGroup"`
 	GroupID        string `json:"groupId"` // Ensure uppercase "ID"
+	ReplyTo		string `json:"replyTo,omitempty"` // Add this field
 }
 
 // MessageResponse defines the response format.
@@ -47,7 +48,7 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 
 	// Call the updated SendMessage function.
-	messageID, conversationID, err := rt.db.SendMessage(userID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID, req.ConversationID)
+	messageID, conversationID, err := rt.db.SendMessage(userID, req.ReceiverID, req.Content, req.IsGroup, req.GroupID, req.ConversationID, req.ReplyTo)
 	if err != nil {
 		http.Error(w, "Failed to send message: "+err.Error(), http.StatusInternalServerError)
 		return

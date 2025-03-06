@@ -46,10 +46,18 @@ export function getConversationByReceiver(receiverId) {
   return axios.get(`/conversationsfor/${receiverId}`);
 }
 
+export async function getConversations() {
+  try {
+    const response = await axios.get("/conversations"); // adjust endpoint if needed
+    return response;
+  } catch (error) {
+    throw error.response?.data || new Error("Failed to load conversations.");
+  }
+}
+
 // Messaging Endpoints
-export function sendMessage({ conversationId, receiverId, content, isGroup, groupId }) {
-  // Now include conversationId (which may be empty if not yet created)
-  return axios.post('/messages', { conversationId, receiverId, content, isGroup, groupId });
+export function sendMessage({ conversationId, receiverId, content, isGroup, groupId, replyTo }) {
+  return axios.post('/messages', { conversationId, receiverId, content, isGroup, groupId, replyTo });
 }
 
 export function forwardMessage(messageId, targetConversationId) {

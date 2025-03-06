@@ -13,30 +13,54 @@
         :class="['message-wrapper', { sent: msg.SenderID === currentUserId }]"
       >
         <div class="message-bubble">
-          <!-- Heart overlay on top of message (like Instagram) -->
-          <div class="heart-overlay" v-if="msg.reactions && msg.reactions.includes('❤️')">
-            ❤️
+          <!-- Only show reply preview when message was sent as a reply -->
+          <div v-if="msg.ReplyTo && msg.ReplyTo !== ''" class="inline-reply-preview">
+            <small>In reply to: {{ getReplyContent(msg.ReplyTo) }}</small>
           </div>
-          <!-- Render image if content is recognized as an image URL -->
+          
+          <!-- Render message content -->
           <div v-if="isImage(msg.Content)">
             <img :src="msg.Content" alt="Image message" class="sent-image" />
           </div>
           <div v-else>
             <p class="message-content">{{ msg.Content }}</p>
           </div>
-          <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
+          
+          <!-- Display reactions if available -->
+          <div v-if="msg.reactions && msg.reactions.length" class="message-reactions">
+            <span 
+              v-for="(reaction, index) in msg.reactions" 
+              :key="index" 
+              class="reaction"
+            >
+              {{ reaction.Reaction }} by <small>{{ reaction.UserName }}</small>
+            </span>
+          </div>
 
+          <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
+          
           <!-- Message Actions -->
           <div class="message-actions">
+            <button @click="replyTo(msg)">Reply</button>
             <button @click="showForwardDialog(msg)">Forward</button>
             <!-- Heart button available for all messages -->
             <button class="heart-button" @click="toggleHeart(msg)">❤️</button>
+            <!-- Conditionally show "Remove Reaction" button if user already reacted -->
+            <button v-if="msg.reactions && msg.reactions.some(r => r.Reaction === '❤️' && r.UserID === currentUserId)"
+                    @click="removeReaction(msg)">
+              Remove Reaction
+            </button>
             <!-- Only allow delete if it's your message -->
             <button v-if="msg.SenderID === currentUserId" @click="deleteMessage(msg.ID)">Delete</button>
-            <button @click="replyTo(msg)">Reply</button>
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Reply Preview Section -->
+    <div v-if="replyingTo" class="reply-preview">
+      <p>Replying to: {{ replyingTo.Content }}</p>
+      <button class="cancel-reply" @click="cancelReply">Cancel Reply</button>
     </div>
 
     <!-- Input Area -->
@@ -61,8 +85,19 @@
     <div v-if="showForwardModal" class="modal">
       <div class="modal-content">
         <h3>Forward Message</h3>
-        <input v-model="forwardTargetConversationId" placeholder="Target Conversation ID" />
-        <button @click="confirmForwardMessage">Forward</button>
+        <!-- Search input for conversations -->
+        <input v-model="forwardSearchQuery" placeholder="Search chats or users" />
+        <!-- List suggestions filtered by the search query -->
+        <ul v-if="forwardSearchQuery && filteredConversations.length" class="conversation-list">
+          <li v-for="conv in filteredConversations" :key="conv.id" @click="selectForwardTarget(conv)">
+            {{ conv.name }}
+          </li>
+        </ul>
+        <!-- Show selected target if any -->
+        <p v-if="forwardTargetConversation">Selected: {{ forwardTargetConversation.name }}</p>
+        <button @click="confirmForwardMessage" :disabled="!forwardTargetConversation">
+          Forward
+        </button>
         <button @click="closeForwardModal">Cancel</button>
       </div>
     </div>
@@ -93,7 +128,8 @@ import {
   commentMessage as commentMessageApi,
   uncommentMessage as uncommentMessageApi,
   deleteMessage as deleteMessageApi,
-  uploadImage
+  uploadImage,
+  getMyConversations // Updated import—use getMyConversations instead of getConversations.
 } from "@/services/api.js";
 
 export default {
@@ -116,6 +152,7 @@ export default {
     const messageToForward = ref(null);
     const forwardSearchQuery = ref("");
     const conversations = ref([]);
+    const forwardTargetConversation = ref(null);
     const selectedMessageId = ref(null);
     const forwardTargetConversationId = ref("");
     const defaultPhoto = "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
@@ -133,39 +170,61 @@ export default {
 
     const replyingTo = ref(null);
 
+    const messagesMap = computed(() => {
+      const map = {};
+      messages.value.forEach(m => {
+        map[m.ID] = m;
+      });
+      return map;
+    });
+
+    // Helper to get reply content from reply_to ID.
+    function getReplyContent(replyID) {
+      const originalMsg = messagesMap.value[replyID];
+      if (!originalMsg) return "[Message deleted]";
+      return isImage(originalMsg.Content) ? "Image" : originalMsg.Content;
+    }
+
     async function toggleHeart(message) {
       try {
         const heart = "❤️";
-        // Check if the message already has a heart reaction.
-        const hasHeart = message.reactions && message.reactions.includes(heart);
+        // Retrieve the current user's ID from localStorage.
+        const currentUserId = localStorage.getItem("userID");
+        // Check if the current user already reacted with a heart.
+        const hasHeart =
+          message.reactions &&
+          message.reactions.some(
+            (r) => r.Reaction === heart && r.UserID === currentUserId
+          );
+
         if (hasHeart) {
-          // Remove the heart reaction using the DELETE endpoint.
-          await uncommentMessageApi(message.ID);
-          message.reactions = message.reactions.filter(r => r !== heart);
+          // Remove the reaction.
+          await uncommentMessageApi(message.ID, heart);
         } else {
-          // Add the heart reaction.
+          // Add the reaction.
           await commentMessageApi(message.ID, heart);
-          if (!message.reactions) {
-            message.reactions = [];
-          }
-          message.reactions.push(heart);
         }
-        // Refresh the messages to update the UI.
+        // Refresh messages from backend.
         await loadConversationMessages(conversationId.value);
       } catch (err) {
         chatError.value = "Failed to toggle heart reaction";
-        console.error(err);
+        console.error("Toggle heart error:", err);
       }
     }
 
     function showForwardDialog(message) {
       messageToForward.value = message;
       showForwardModal.value = true;
+      forwardSearchQuery.value = "";
+      forwardTargetConversation.value = null;
+      loadConversations();
     }
 
     function closeForwardModal() {
       showForwardModal.value = false;
-      forwardTargetConversationId.value = "";
+      forwardSearchQuery.value = "";
+      forwardTargetConversation.value = null;
+      messageToForward.value = null;
     }
 
     async function forwardMessage(message, targetConversationId) {
@@ -231,36 +290,34 @@ export default {
     }
 
     function scrollToBottom() {
-      if (messagesContainer.value) {
-        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+      const container = messagesContainer.value;
+      if (!container) return;
+
+      // Define a threshold in pixels. Only auto-scroll if the user is within 50px of the bottom.
+      const threshold = 10;
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+
+      if (distanceFromBottom < threshold) {
+        container.scrollTop = container.scrollHeight;
       }
     }
 
     async function sendMessageHandler() {
       if (!newMessage.value.trim()) return;
-      chatError.value = "";
+
       const payload = {
         conversationId: conversationId.value,
         receiverId: receiverId.value,
         content: newMessage.value,
+        isGroup: false,
+        groupId: "",
+        replyTo: replyingTo.value ? replyingTo.value.ID : ""  // replyTo is set only when replying
       };
-      
-      // Add reply reference if replying
-      if (replyingTo.value) {
-        payload.replyTo = replyingTo.value.ID;
-      }
-      
+
       try {
-        const response = await sendMessage(payload);
+        await sendMessage(payload);
         newMessage.value = "";
-        replyingTo.value = null; // Clear reply state
-        if (!conversationId.value && response.data.conversationId) {
-          conversationId.value = response.data.conversationId;
-          router.replace({
-            name: 'ChatView',
-            params: { conversationId: response.data.conversationId }
-          });
-        }
+        replyingTo.value = null; // clear reply state after sending
         await loadConversationMessages(conversationId.value);
       } catch (err) {
         console.error("Error sending message:", err);
@@ -371,18 +428,23 @@ export default {
     }
 
     const confirmForwardMessage = async () => {
-      if (!messageToForward.value || !forwardTargetConversationId.value) {
+      if (!messageToForward.value || !forwardTargetConversation.value) {
         chatError.value = "Missing required information";
+        return;
+      }
+      // Use conv.id if available; otherwise, try conv.ID.
+      const targetId =
+        forwardTargetConversation.value.id ||
+        forwardTargetConversation.value.ID;
+      if (!targetId) {
+        chatError.value = "Selected conversation has no valid ID.";
         return;
       }
       
       try {
-        await forwardMessageApi(
-          messageToForward.value.ID, 
-          forwardTargetConversationId.value
-        );
+        await forwardMessageApi(messageToForward.value.ID, targetId);
         showForwardModal.value = false;
-        forwardTargetConversationId.value = '';
+        forwardTargetConversation.value = null;
         messageToForward.value = null;
         chatError.value = "Message forwarded successfully";
         await loadConversationMessages(conversationId.value);
@@ -402,6 +464,33 @@ export default {
       const pattern = new RegExp(`https?://.*\\.(${imageExtensions.join("|")})(\\?.*)?$`, "i");
       return pattern.test(content);
     };
+
+    async function removeReaction(message) {
+      try {
+        // Call the uncomment endpoint to remove the reaction for this message.
+        await uncommentMessageApi(message.ID);
+        // Refresh messages after removing the reaction.
+        await loadConversationMessages(conversationId.value);
+      } catch (err) {
+        chatError.value = "Failed to remove reaction";
+        console.error("Remove Reaction error:", err);
+      }
+    }
+
+    function selectForwardTarget(conv) {
+      forwardTargetConversation.value = conv;
+      forwardSearchQuery.value = conv.name; // Shows the selected conversation
+    }
+
+    async function loadConversations() {
+      try {
+        const response = await getMyConversations();
+        // Assume API returns an array of conversations under response.data.conversations
+        conversations.value = response.data.conversations;
+      } catch (err) {
+        console.error("Error loading conversations:", err);
+      }
+    }
 
     return {
       conversationTitle,
@@ -430,7 +519,11 @@ export default {
       replyingTo,
       replyTo,
       cancelReply,
-      isImage // <-- Added here
+      isImage, // <-- Added here
+      messagesMap, // <-- Added here
+      getReplyContent, // <-- Added here
+      removeReaction, // <-- Added here
+      selectForwardTarget // <-- Added here
     };
   },
 };
@@ -629,5 +722,97 @@ export default {
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 0.9rem;
+}
+
+.image-upload-button {
+  display: inline-block;
+  font-size: 1.8rem; /* Increase font size for the icon */
+  width: 48px;       /* Increase width */
+  height: 48px;      /* Increase height */
+  line-height: 48px; /* Center the icon vertically */
+  text-align: center;
+  border: 2px solid #007bff;
+  border-radius: 50%;
+  color: #007bff;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.image-upload-button:hover {
+  background-color: #007bff;
+  color: #fff;
+}
+
+.reply-preview {
+  background-color: #f1f1f1;
+  padding: 8px;
+  border-left: 4px solid #007bff;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cancel-reply {
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+}
+
+.chat-input-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 8px;
+}
+
+.send-button {
+  padding: 8px 16px;
+}
+
+.inline-reply-preview {
+  background-color: #e9f5ff;
+  border-left: 3px solid #007bff;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.message-reactions {
+  margin-top: 4px;
+  display: flex;
+  gap: 4px;
+  font-size: 1.2rem;
+}
+.reaction {
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  padding: 2px 6px;
+}
+
+.conversation-list {
+  list-style: none;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 8px 0;
+}
+
+.conversation-list li {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.conversation-list li:hover {
+  background: #f1f2f5;
 }
 </style>
