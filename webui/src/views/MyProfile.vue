@@ -8,7 +8,8 @@
         </div>
         <div class="profile-content">
           <div class="profile-image-container">
-            <img :src="currentPhotoUrl || defaultPhoto" alt="Profile Photo" class="profile-image" />
+            <!-- Add unique key to force image refresh + timestamp to prevent caching -->
+            <img :src="currentPhotoUrl || defaultPhoto" :key="imageKey" alt="Profile Photo" class="profile-image" />
           </div>
           <h2 class="profile-username">{{ currentUsername }}</h2>
         </div>
@@ -73,6 +74,9 @@ export default {
     const currentUsername = ref(localStorage.getItem("username") || "Username");
     const currentPhotoUrl = ref(localStorage.getItem("photoUrl") || "");
     
+    // Add imageKey to force re-render when photo changes
+    const imageKey = ref(Date.now());
+    
     const newUsername = ref("");
     const message = ref("");
     const error = ref("");
@@ -111,44 +115,59 @@ export default {
       formData.append("photo", selectedFile.value);
       try {
         const response = await updatePhoto(formData);
-        // Assuming response.data.photoUrl contains the new URL
-        currentPhotoUrl.value = response.data.photoUrl;
-        localStorage.setItem("photoUrl", response.data.photoUrl);
-        message.value = "Profile photo updated successfully.";
+        console.log("Photo update response:", response);
+        
+        if (response.data && response.data.photoUrl) {
+          // Update the photo URL with a timestamp to prevent caching
+          const photoUrl = response.data.photoUrl;
+          const updatedUrl = photoUrl.includes('?') 
+            ? `${photoUrl}&t=${Date.now()}` 
+            : `${photoUrl}?t=${Date.now()}`;
+          
+          currentPhotoUrl.value = updatedUrl;
+          localStorage.setItem("photoUrl", photoUrl); // Store without timestamp
+          
+          // Update image key to force re-rendering of the image
+          imageKey.value = Date.now();
+          
+          message.value = "Profile photo updated successfully.";
+          console.log("Updated photo URL:", updatedUrl);
+        } else {
+          error.value = "Invalid response format from server.";
+          console.error("Invalid response format:", response);
+        }
       } catch (err) {
         error.value = "Failed to update profile photo.";
+        console.error("Photo update error:", err);
       }
     }
-
-    // Function to refresh profile data
-    async function refreshProfile() {
-      try {
-        // You may need to implement a getUserProfile API method
-        // This is just an example of what it might look like
-        const response = await getUserProfile();
-        if (response.data.username) {
-          currentUsername.value = response.data.username;
-          localStorage.setItem("username", response.data.username);
-        }
-        if (response.data.photoUrl) {
-          currentPhotoUrl.value = response.data.photoUrl;
-          localStorage.setItem("photoUrl", response.data.photoUrl);
-        }
-      } catch (err) {
-        // Handle silently - this is just a background refresh
-        console.error("Failed to refresh profile:", err);
+    
+    // Function to refresh profile data periodically
+    function refreshProfile() {
+      const storedUsername = localStorage.getItem("username");
+      const storedPhotoUrl = localStorage.getItem("photoUrl");
+      
+      if (storedUsername && storedUsername !== currentUsername.value) {
+        currentUsername.value = storedUsername;
+      }
+      
+      if (storedPhotoUrl && storedPhotoUrl !== currentPhotoUrl.value) {
+        // Add timestamp to prevent browser caching
+        const updatedUrl = storedPhotoUrl.includes('?') 
+          ? `${storedPhotoUrl}&t=${Date.now()}` 
+          : `${storedPhotoUrl}?t=${Date.now()}`;
+        
+        currentPhotoUrl.value = updatedUrl;
+        imageKey.value = Date.now(); // Force image to re-render
       }
     }
-
+    
     // Set up auto-refresh
     let refreshInterval;
     
     onMounted(() => {
-      // Initial load (optional)
-      // refreshProfile();
-      
-      // Auto-refresh every half second
-      refreshInterval = setInterval(refreshProfile, 500);
+      // Auto-refresh every 2 seconds
+      refreshInterval = setInterval(refreshProfile, 2000);
     });
     
     onUnmounted(() => {
@@ -161,6 +180,7 @@ export default {
       currentUsername,
       currentPhotoUrl,
       defaultPhoto,
+      imageKey,
       newUsername,
       message,
       error,
