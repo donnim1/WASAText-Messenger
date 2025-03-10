@@ -109,7 +109,7 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 		}
 
 		// Save file URL to database
-		photoUrl := fmt.Sprintf("http://localhost:3000/%s", filePath)
+		photoUrl := fmt.Sprintf("/%s", filePath)
 		if err := rt.db.UpdateUserPhoto(userID, photoUrl); err != nil {
 			log.Printf("❌ Database update failed: %v", err)
 			http.Error(w, "Failed to update photo in database", http.StatusInternalServerError)
