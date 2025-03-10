@@ -29,7 +29,7 @@ func (rt *_router) Handler() http.Handler {
 
 	// Group endpoints
 	rt.router.GET("/groups", rt.listGroups)
-	rt.router.POST("/groups", rt.createGroup)
+	rt.router.POST("/group", rt.createGroup)
 
 	// Then register dynamic routes.
 	rt.router.POST("/groups/:groupId/members", rt.addToGroup)

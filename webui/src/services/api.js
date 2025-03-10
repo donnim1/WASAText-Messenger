@@ -88,7 +88,7 @@ export function listUserGroups() {
 }
 
 export function createGroup(data) {
-  return axios.post('/groups', data);
+  return axios.post('/group', data);
 }
 
 export function addUserToGroup(groupId, targetUserId) {

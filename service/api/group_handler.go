@@ -333,8 +333,8 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 		}
 
 		// Construct a new group photo URL.
-		// IMPORTANT: Derive the base URL dynamically in production.
-		photoUrl := fmt.Sprintf("http://localhost:3000/%s", filePath)
+		// With this (using relative path instead):
+		photoUrl := fmt.Sprintf("/%s", filePath)
 		if err := rt.db.SetGroupPhoto(groupID, photoUrl); err != nil {
 			http.Error(w, "Failed to update group photo: "+err.Error(), http.StatusInternalServerError)
 			return

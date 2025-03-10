@@ -14,6 +14,9 @@ FROM debian:bullseye
 ### Inform Docker about which port is used
 EXPOSE 3000 4000
 
+### Create necessary directories 
+RUN mkdir -p /app/data /app/uploads
+
 ### Copy the build executable from the builder image
 WORKDIR /app/
 COPY --from=builder /app/webapi ./
