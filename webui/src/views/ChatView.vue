@@ -407,12 +407,12 @@ export default {
     let messagePollingInterval;
 
     function startMessagePolling() {
-      // Poll every 5 seconds
+      // Poll every half second (500ms)
       messagePollingInterval = setInterval(async () => {
         if (conversationId.value) {
           await loadConversationMessages(conversationId.value);
         }
-      }, 1000);
+      }, 500); // Changed from 1000 to 500ms
     }
 
     function stopMessagePolling() {

@@ -184,11 +184,11 @@ export default {
       loadConversations();
       loadUsers();
 
-      // Auto-refresh every 1 second
+      // Auto-refresh every half second
       refreshInterval = setInterval(() => {
         loadConversations();
         loadUsers();
-      }, 1000);
+      }, 500); // Changed from 1000 to 500ms
     });
 
     onUnmounted(() => {

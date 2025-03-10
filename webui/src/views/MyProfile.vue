@@ -61,7 +61,7 @@
 </template>
 
 <script>
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { updateUsername, updatePhoto } from "@/services/api.js";
 
 export default {
@@ -119,6 +119,43 @@ export default {
         error.value = "Failed to update profile photo.";
       }
     }
+
+    // Function to refresh profile data
+    async function refreshProfile() {
+      try {
+        // You may need to implement a getUserProfile API method
+        // This is just an example of what it might look like
+        const response = await getUserProfile();
+        if (response.data.username) {
+          currentUsername.value = response.data.username;
+          localStorage.setItem("username", response.data.username);
+        }
+        if (response.data.photoUrl) {
+          currentPhotoUrl.value = response.data.photoUrl;
+          localStorage.setItem("photoUrl", response.data.photoUrl);
+        }
+      } catch (err) {
+        // Handle silently - this is just a background refresh
+        console.error("Failed to refresh profile:", err);
+      }
+    }
+
+    // Set up auto-refresh
+    let refreshInterval;
+    
+    onMounted(() => {
+      // Initial load (optional)
+      // refreshProfile();
+      
+      // Auto-refresh every half second
+      refreshInterval = setInterval(refreshProfile, 500);
+    });
+    
+    onUnmounted(() => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    });
 
     return {
       currentUsername,

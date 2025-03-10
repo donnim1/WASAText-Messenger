@@ -275,7 +275,6 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httpr
 
 // setGroupPhotoRequest defines the expected JSON payload for updating a group's photo.
 
-
 // setGroupPhoto handles PUT /groups/photo to update a group's photo.
 // convertDBConversationToConversation converts a database.Conversation to an API Conversation.
 // Adjust the fields below as needed to match both types.

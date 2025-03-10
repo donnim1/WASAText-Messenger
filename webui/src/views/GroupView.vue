@@ -311,10 +311,10 @@ export default {
       showUpdateModal.value = false;
     }
 
-    // Auto-refresh every 1 second.
+    // Auto-refresh every half second
     onMounted(() => {
       refreshGroups();
-      refreshInterval = setInterval(refreshGroups, 1000);
+      refreshInterval = setInterval(refreshGroups, 500); // Changed from 1000 to 500ms
     });
 
     onUnmounted(() => {

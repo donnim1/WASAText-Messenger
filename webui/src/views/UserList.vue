@@ -74,7 +74,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { listUsers, getConversationByReceiver } from "@/services/api.js";
 import { useRouter } from "vue-router";
 
@@ -132,6 +132,18 @@ export default {
 
     onMounted(() => {
       refreshUsers();
+      
+      // Add auto-refresh every half second
+      const refreshInterval = setInterval(() => {
+        refreshUsers();
+      }, 500);
+      
+      // Clean up interval when component unmounts
+      onUnmounted(() => {
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+        }
+      });
     });
 
     return {

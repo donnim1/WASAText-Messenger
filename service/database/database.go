@@ -100,7 +100,7 @@ func (db *appdbimpl) GetConversationBetween(userID1, userID2 string) (*Conversat
 	var convID string
 	err := db.db.QueryRow(query, userID1, userID2).Scan(&convID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("conversation not found")
 		}
 		return nil, err
@@ -812,7 +812,7 @@ func (db *appdbimpl) GetPrivateConversation(userID, receiverID string) (*Convers
 	var conv Conversation
 	if err := row.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt); err != nil {
 		// If the error is due to no rows, return nil without an error.
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
