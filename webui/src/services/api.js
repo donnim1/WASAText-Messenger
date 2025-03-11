@@ -60,8 +60,11 @@ export function sendMessage({ conversationId, receiverId, content, isGroup, grou
   return axios.post('/messages', { conversationId, receiverId, content, isGroup, groupId, replyTo });
 }
 
-export function forwardMessage(messageId, targetConversationId) {
-  return axios.post(`/messages/${messageId}/forward`, { targetConversationId });
+export function forwardMessageApi(messageId, targetConversationId) {
+  console.log(`API calling /messages/${messageId}/forward with:`, { targetConversationId });
+  return axios.post(`/messages/${messageId}/forward`, {
+    targetConversationId: targetConversationId  // Make sure the property name matches exactly
+  });
 }
 
 export async function commentMessage(messageId, reaction) {
@@ -130,4 +133,8 @@ export async function uploadGroupImage(groupId, formData) {
   return axios.put(`/groups/${groupId}/photo`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+}
+
+export function updateMessageStatus(messageId, status) {
+  return axios.post(`/messages/${messageId}/status/${status}`);
 }

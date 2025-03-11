@@ -12,7 +12,7 @@
         :key="msg.ID"
         :class="['message-wrapper', { sent: msg.SenderID === currentUserId }]"
       >
-        <div class="message-bubble">
+        <div class="message-bubble" :data-message-id="msg.ID">
           <!-- Only show reply preview when message was sent as a reply -->
           <div v-if="msg.ReplyTo && msg.ReplyTo !== ''" class="inline-reply-preview">
             <small>In reply to: {{ getReplyContent(msg.ReplyTo) }}</small>
@@ -38,6 +38,28 @@
           </div>
 
           <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
+          
+          <!-- Checkmarks for sent messages (only for messages you sent) -->
+          <template v-if="msg.SenderID === currentUserId">
+            <span class="message-status">
+              <template v-if="msg.status === 'pending'">
+                <!-- Pending (clock icon) -->
+                <i class="fas fa-clock"></i>
+              </template>
+              <template v-else-if="msg.status === 'sent'">
+                <!-- Single checkmark -->
+                <i class="fas fa-check"></i>
+              </template>
+              <template v-else-if="msg.status === 'delivered'">
+                <!-- Double checkmark for delivered -->
+                <i class="fas fa-check-double"></i>
+              </template>
+              <template v-else-if="msg.status === 'read'">
+                <!-- Double checkmark colored for read -->
+                <i class="fas fa-check-double read"></i>
+              </template>
+            </span>
+          </template>
           
           <!-- Message Actions -->
           <div class="message-actions">
@@ -83,22 +105,40 @@
 
     <!-- Forward Modal -->
     <div v-if="showForwardModal" class="modal">
-      <div class="modal-content">
-        <h3>Forward Message</h3>
-        <!-- Search input for conversations -->
-        <input v-model="forwardSearchQuery" placeholder="Search chats or users" />
-        <!-- List suggestions filtered by the search query -->
-        <ul v-if="forwardSearchQuery && filteredConversations.length" class="conversation-list">
-          <li v-for="conv in filteredConversations" :key="conv.id" @click="selectForwardTarget(conv)">
-            {{ conv.name }}
-          </li>
-        </ul>
-        <!-- Show selected target if any -->
-        <p v-if="forwardTargetConversation">Selected: {{ forwardTargetConversation.name }}</p>
-        <button @click="confirmForwardMessage" :disabled="!forwardTargetConversation">
-          Forward
-        </button>
-        <button @click="closeForwardModal">Cancel</button>
+      <div class="forward-modal-content">
+        <div class="forward-modal-header">
+          <h3>Forward Message</h3>
+        </div>
+        <div class="forward-modal-body">
+          <input v-model="forwardSearchQuery" class="forward-search-input" placeholder="Search chats or users" />
+          <ul class="conversation-list">
+            <li v-if="filteredConversations.length === 0" class="no-results">
+              No conversations found
+            </li>
+            <li v-for="conv in filteredConversations" 
+                :key="conv.id"
+                @click="selectForwardTarget(conv)"
+                :class="['conversation-item', { selected: forwardTargetConversation && ((conv.id || conv.ID) === (forwardTargetConversation.id || forwardTargetConversation.ID)) }]">
+              <span class="conversation-name">{{ conv.name || 'Unnamed Chat' }}</span>
+              <span v-if="conv.is_group" class="group-badge">Group</span>
+            </li>
+          </ul>
+          <div v-if="forwardTargetConversation" class="selected-info">
+            Selected: <strong>{{ forwardTargetConversation.name }}</strong>
+          </div>
+        </div>
+        <div class="forward-modal-footer">
+          <button 
+            @click="confirmForwardMessage" 
+            :disabled="!forwardTargetConversation" 
+            class="btn forward-btn"
+            style="cursor: pointer !important; position: relative !important; z-index: 9999 !important;">
+            Forward
+          </button>
+          <button @click="closeForwardModal" class="btn cancel-btn">
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
 
@@ -114,6 +154,13 @@
         <button @click="cancelReply">✕</button>
       </div>
     </div>
+
+    <button 
+      @click="testClickForward"
+      class="btn" 
+      style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: red; color: white;">
+      TEST FORWARD
+    </button>
   </div>
 </template>
 
@@ -124,12 +171,13 @@ import {
   getConversation,
   sendMessage,
   getConversationByReceiver,
-  forwardMessage as forwardMessageApi,
+  forwardMessageApi,  // Changed here: use the direct export name
   commentMessage as commentMessageApi,
   uncommentMessage as uncommentMessageApi,
   deleteMessage as deleteMessageApi,
   uploadImage,
-  getMyConversations // Updated import—use getMyConversations instead of getConversations.
+  getMyConversations, // Updated import—use getMyConversations instead of getConversations.
+  updateMessageStatus // make sure this is exported
 } from "@/services/api.js";
 
 export default {
@@ -230,6 +278,10 @@ export default {
     }
 
     function showForwardDialog(message) {
+      console.log("Message to forward object:", message);
+      console.log("Message ID exists:", message.id !== undefined);
+      console.log("Message ID uppercase exists:", message.ID !== undefined);
+      
       messageToForward.value = message;
       showForwardModal.value = true;
       forwardSearchQuery.value = "";
@@ -275,12 +327,14 @@ export default {
       chatError.value = "";
       try {
         const response = await getConversation(convId);
-        messages.value = response.data.messages;
+        messages.value = response.data.messages || [];
         await nextTick();
         scrollToBottom();
+        markVisibleMessagesAsRead();
       } catch (err) {
         console.error("Error loading messages:", err);
         chatError.value = "Failed to load messages";
+        messages.value = []; // Fallback to empty array on error.
       } finally {
         loading.value = false;
       }
@@ -430,12 +484,13 @@ export default {
 
     watch(
       () => route.params.conversationId,
-      async (newId) => {
-        if (newId) {
-          conversationId.value = newId;
+      async (newId, oldId) => {
+        if (newId && newId !== oldId) {
+          console.log("Loading conversation:", newId);
           await loadConversationMessages(newId);
         }
-      }
+      },
+      { immediate: true }
     );
 
     watch(
@@ -460,28 +515,61 @@ export default {
 
     const confirmForwardMessage = async () => {
       if (!messageToForward.value || !forwardTargetConversation.value) {
-        chatError.value = "Missing required information";
+        chatError.value = "Please select a conversation to forward this message to";
         return;
       }
-      // Use conv.id if available; otherwise, try conv.ID.
-      const targetId =
-        forwardTargetConversation.value.id ||
-        forwardTargetConversation.value.ID;
-      if (!targetId) {
-        chatError.value = "Selected conversation has no valid ID.";
+      
+      // Get the necessary IDs
+      const messageId = messageToForward.value.ID || messageToForward.value.id;
+      const targetId = forwardTargetConversation.value.id || 
+                     forwardTargetConversation.value.ID || 
+                     forwardTargetConversation.value.conversationId;
+      
+      if (!messageId || !targetId) {
+        chatError.value = "Invalid message or conversation";
         return;
       }
       
       try {
-        await forwardMessageApi(messageToForward.value.ID, targetId);
+        console.log(`Forwarding message ${messageId} to conversation ${targetId}`);
+        
+        // Make the API call
+        await forwardMessageApi(messageId, targetId);
+        
+        // Save the target conversation info before closing modal
+        const targetName = forwardTargetConversation.value.name;
+        const isTargetGroup = forwardTargetConversation.value.is_group;
+        
+        // Close modal and clear state
         showForwardModal.value = false;
-        forwardTargetConversation.value = null;
         messageToForward.value = null;
-        chatError.value = "Message forwarded successfully";
-        await loadConversationMessages(conversationId.value);
+        
+        // Show success message
+        chatError.value = `Message forwarded to ${targetName}!`;
+        
+        // Option 1: Navigate to the target conversation immediately
+        router.push({ 
+          name: 'ChatView',
+          params: { conversationId: targetId },
+          query: { 
+            receiverName: targetName,
+            isGroup: isTargetGroup 
+          }
+        });
+        
+        /* Option 2: Show a button to navigate (uncomment if preferred)
+        const shouldNavigate = confirm(`Message forwarded to ${targetName}. View conversation?`);
+        if (shouldNavigate) {
+          router.push({ 
+            name: 'conversation',
+            params: { conversationId: targetId } 
+          });
+        }
+        */
+        
       } catch (error) {
         console.error("Forward Message Error:", error);
-        chatError.value = "Failed to forward message";
+        chatError.value = "Failed to forward message: " + (error.response?.data || error.message);
       }
     };
 
@@ -509,18 +597,79 @@ export default {
     }
 
     function selectForwardTarget(conv) {
+      console.log("Selected conversation full object:", conv);
+      console.log("ID property exists:", conv.id !== undefined);
+      console.log("ID property value:", conv.id);
+      console.log("ID property uppercase exists:", conv.ID !== undefined);
+      console.log("ID property uppercase value:", conv.ID);
+      
       forwardTargetConversation.value = conv;
-      forwardSearchQuery.value = conv.name; // Shows the selected conversation
+      forwardSearchQuery.value = conv.name || "Selected conversation"; 
     }
 
     async function loadConversations() {
       try {
         const response = await getMyConversations();
-        // Assume API returns an array of conversations under response.data.conversations
-        conversations.value = response.data.conversations;
+        console.log("Raw conversations response:", response);
+        
+        if (response.data && Array.isArray(response.data.conversations)) {
+          conversations.value = response.data.conversations;
+          console.log("First conversation:", conversations.value[0]);
+        } else if (response.data && Array.isArray(response.data)) {
+          conversations.value = response.data;
+          console.log("First conversation:", conversations.value[0]);
+        } else {
+          console.error("Unexpected conversations API response structure:", response);
+          conversations.value = [];
+        }
       } catch (err) {
         console.error("Error loading conversations:", err);
+        conversations.value = [];
       }
+    }
+
+    async function markMessagesAsRead() {
+      const unread = messages.value.filter(
+        (msg) => msg.SenderID !== currentUserId && msg.status !== 'read'
+      );
+      for (const msg of unread) {
+        try {
+          await updateMessageStatus(msg.ID, 'read');
+          msg.status = 'read';
+          // Optionally update msg.readAt if you return it from the API.
+        } catch (err) {
+          console.error(`Failed to update status for message ${msg.ID}:`, err);
+        }
+      }
+    }
+
+    async function markVisibleMessagesAsRead() {
+      if (!messagesContainer.value) return;
+      const observer = new IntersectionObserver(
+        async (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const msgId = entry.target.dataset.messageId;
+              const msg = messages.value.find(m => m.ID === msgId);
+              if (msg && msg.SenderID !== currentUserId && msg.status !== 'read') {
+                try {
+                  await updateMessageStatus(msg.ID, 'read');
+                  msg.status = 'read';
+                } catch (err) {
+                  console.error(`Failed to mark message ${msg.ID} as read:`, err);
+                }
+              }
+            }
+          }
+        },
+        {
+          root: messagesContainer.value,
+          threshold: 0.5,
+        }
+      );
+      document.querySelectorAll(".message-bubble").forEach(el => {
+        observer.observe(el);
+      });
     }
 
     return {
@@ -554,11 +703,14 @@ export default {
       messagesMap, // <-- Added here
       getReplyContent, // <-- Added here
       removeReaction, // <-- Added here
-      selectForwardTarget // <-- Added here
+      selectForwardTarget, // <-- Added here
+       // <-- Added here
     };
   },
 };
 </script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" />
 
 <style scoped>
 /* Main chat view container */
@@ -845,5 +997,108 @@ export default {
 
 .conversation-list li:hover {
   background: #f1f2f5;
+}
+
+/* Forward Modal Layout Changes */
+.forward-modal-content {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+.forward-modal-header h3 {
+  margin: 0 0 10px 0;
+  text-align: center;
+}
+.forward-modal-body {
+  flex: 1;
+  overflow-y: auto;
+}
+.forward-search-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+.conversation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.conversation-item {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.conversation-item:hover,
+.conversation-item.selected {
+  background-color: #f1f2f5;
+}
+.group-badge {
+  background-color: #007bff;
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 10px;
+}
+.selected-info {
+  margin-top: 15px;
+  font-size: 1rem;
+  text-align: center;
+}
+.forward-modal-footer {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 20px;
+}
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.forward-btn {
+  background-color: #007bff;
+  color: #fff;
+  z-index: 1001; /* This is correct */
+}
+.forward-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.cancel-btn {
+  background-color: #ccc;
+  color: #333;
+}
+
+.sent-image {
+  max-width: 100%; /* Prevents image from overflowing message container */
+  max-height: 250px; /* Sets a reasonable maximum height */
+  border-radius: 8px; /* Rounds corners to match message style */
+  object-fit: contain; /* Maintains aspect ratio */
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: opacity 0.3s ease;
+}
+
+.message-status {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+/* When the message is read, show a blue-colored double checkmark */
+.message-status .read {
+  color: #3498db;
 }
 </style>

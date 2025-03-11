@@ -205,3 +205,27 @@ func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps http
 		log.Printf("Error encoding response: %v", err)
 	}
 }
+func (rt *_router) updateMessageStatus(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    // Get message ID and new status from URL parameters.
+    messageID := ps.ByName("messageId")
+    status := ps.ByName("status") // Expected values: "delivered" or "read"
+    if messageID == "" || status == "" {
+        http.Error(w, "Message ID and status are required", http.StatusBadRequest)
+        return
+    }
+
+    // Retrieve the authenticated user's ID.
+    userID, err := rt.getAuthenticatedUserID(r)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Update the message status in the database.
+    if err := rt.db.UpdateMessageStatus(messageID, status, userID); err != nil {
+        http.Error(w, "Failed to update message status: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+}

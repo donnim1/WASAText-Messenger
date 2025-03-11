@@ -32,6 +32,8 @@ type AppDatabase interface {
 	UncommentMessage(messageID, userID string) error
 	DeleteMessage(messageID, senderID string) error
 
+	UpdateMessageStatus(messageID, status, userID string) error
+
 	// CreateGroup creates a new group conversation and adds the creator as a member.
 	CreateGroup(creatorID, groupName, groupPhoto string) (string, error)
 	// Register the GET /groups endpoint.
@@ -70,13 +72,16 @@ type Conversation struct {
 }
 
 type Message struct {
-	ID             string     `json:"ID"`
-	ConversationID string     `json:"ConversationID"`
-	SenderID       string     `json:"SenderID"`
-	Content        string     `json:"Content"`
-	ReplyTo        string     `json:"ReplyTo,omitempty"` // Changed to string
-	SentAt         string     `json:"SentAt"`
-	Reactions      []Reaction `json:"reactions"` // New field for reactions
+	ID             string       `json:"ID"`
+	ConversationID string       `json:"ConversationID"`
+	SenderID       string       `json:"SenderID"`
+	Content        string       `json:"Content"`
+	ReplyTo        string       `json:"ReplyTo,omitempty"` // Changed to string
+	SentAt         string       `json:"SentAt"`
+	Reactions      []Reaction   `json:"reactions"` // New field for reactions
+	Status         string       `json:"status"`    // "pending", "sent", "delivered", "read"
+	DeliveredAt    sql.NullTime `json:"deliveredAt,omitempty"`
+	ReadAt         sql.NullTime `json:"readAt,omitempty"`
 }
 
 type Reaction struct {
@@ -258,7 +263,7 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 	// Retrieve messages for this conversation.
 	var messages []Message
 	rows, err := db.db.Query(`
-	SELECT id, conversation_id, sender_id, content, reply_to, sent_at 
+	SELECT id, conversation_id, sender_id, content, reply_to, sent_at, status, deliveredAt, readAt 
 	FROM messages 
 	WHERE conversation_id = ? 
 	ORDER BY sent_at ASC`, conversationID)
@@ -270,7 +275,7 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 	for rows.Next() {
 		var msg Message
 		var replyTo sql.NullString
-		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &replyTo, &msg.SentAt); err != nil {
+		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &replyTo, &msg.SentAt, &msg.Status, &msg.DeliveredAt, &msg.ReadAt); err != nil {
 			return &conv, messages, fmt.Errorf("failed to scan message: %w", err)
 		}
 		if replyTo.Valid {
@@ -365,6 +370,9 @@ func New(db *sql.DB) (AppDatabase, error) {
 		content TEXT NOT NULL, -- Message text or media URL
 		reply_to TEXT NULL, -- If replying to another message
 		sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		status TEXT NOT NULL DEFAULT 'sent',
+        deliveredAt DATETIME,
+        readAt DATETIME,
 		FOREIGN KEY (conversation_id) REFERENCES conversations(id),
 		FOREIGN KEY (sender_id) REFERENCES users(id),
 		FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE CASCADE
@@ -643,23 +651,32 @@ func (db *appdbimpl) createConversation(userID, receiverID string) (string, erro
 
 // ForwardMessage forwards a message to another conversation.
 func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
-	var originalMessage Message
-	err := db.db.QueryRow("SELECT content, reply_to FROM messages WHERE id = ?", originalMessageID).
-		Scan(&originalMessage.Content, &originalMessage.ReplyTo)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("original message not found")
-	} else if err != nil {
+	// Retrieve the original message content.
+	var originalContent string
+	err := db.db.QueryRow("SELECT content FROM messages WHERE id = ?", originalMessageID).
+		Scan(&originalContent)
+	if err != nil {
 		return "", fmt.Errorf("failed to retrieve original message: %w", err)
 	}
+
 	newMessageID, err := GenerateNewID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate new message ID: %w", err)
 	}
-	_, err = db.db.Exec("INSERT INTO messages (id, conversation_id, sender_id, content, reply_to) VALUES (?, ?, ?, ?, ?)",
-		newMessageID, targetConversationID, senderID, originalMessage.Content, originalMessage.ReplyTo)
+
+	// Prepend a forwarded indicator.
+	newContent := fmt.Sprintf("Forwarded from you: %s", originalContent)
+
+	currentTime := time.Now().UTC().Format(time.RFC3339)
+
+	// IMPORTANT FIX: Make sure this SQL has the same number of columns and placeholders (?)
+	_, err = db.db.Exec(
+		"INSERT INTO messages (id, conversation_id, sender_id, content, reply_to, sent_at) VALUES (?, ?, ?, ?, ?, ?)",
+		newMessageID, targetConversationID, senderID, newContent, nil, currentTime)
 	if err != nil {
-		return "", fmt.Errorf("failed to forward message: %w", err)
+		return "", fmt.Errorf("failed to insert forwarded message: %w", err)
 	}
+
 	return newMessageID, nil
 }
 
@@ -818,4 +835,20 @@ func (db *appdbimpl) GetPrivateConversation(userID, receiverID string) (*Convers
 		return nil, err
 	}
 	return &conv, nil
+}
+func (db *appdbimpl) UpdateMessageStatus(messageID, status, userID string) error {
+	currentTime := time.Now().UTC().Format(time.RFC3339)
+
+	// For "delivered": update status and deliveredAt (only if the current status is not already "read").
+	if status == "delivered" {
+		query := "UPDATE messages SET status = ?, deliveredAt = ? WHERE id = ? AND status != 'read'"
+		_, err := db.db.Exec(query, status, currentTime, messageID)
+		return err
+	} else if status == "read" {
+		// For "read": update status and readAt.
+		query := "UPDATE messages SET status = ?, readAt = ? WHERE id = ?"
+		_, err := db.db.Exec(query, status, currentTime, messageID)
+		return err
+	}
+	return fmt.Errorf("unsupported status update: %s", status)
 }

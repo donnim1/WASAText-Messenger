@@ -26,6 +26,7 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.POST("/messages/:messageId/comments", rt.commentMessage)
 	rt.router.DELETE("/messages/:messageId/uncomment", rt.uncommentMessage)
 	rt.router.DELETE("/messages/:messageId/delete", rt.deleteMessage)
+	rt.router.POST("/messages/:messageId/status/:status", rt.updateMessageStatus)
 
 	// Group endpoints
 	rt.router.GET("/groups", rt.listGroups)
