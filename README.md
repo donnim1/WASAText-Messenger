@@ -1,9 +1,9 @@
 WASAText Messenger
-WASAText is a web-based messaging application that offers both one-on-one and group chat functionalities. It includes features such as file attachments, message reactions, and message forwarding. The project is built with a Go backend (using SQLite as the datastore) and a Vue.js frontend.
+WASAText is a web-based messaging application offering both one-on-one and group chat functionalities. It supports features such as file attachments, message reactions, and message forwarding. The project comprises a Go backend (utilizing SQLite as the datastore) and a Vue.js frontend.
 
 Features
-Direct & Group Messaging: Engage in private conversations or create groups.
-File Attachments: Send images and GIFs.
+Direct & Group Messaging: Initiate private conversations or create group chats.
+File Attachments: Share images and GIFs.
 Message Reactions: React to messages (e.g., like with a ❤️).
 Forwarding & Replying: Forward messages to other chats and reply with context.
 Profile Management: Update your username and profile photo.
@@ -20,71 +20,93 @@ Vue.js: Reactive UI framework.
 Vue Router: SPA navigation.
 Axios: HTTP client for API calls.
 Bootstrap & Custom CSS: Responsive design.
-Setup & Running the Application on Your Local Machine
-Backend
-Prerequisites:
+Project Structure
+cmd/: Contains all executables; Go programs here should handle tasks like reading options from the CLI/environment.
+cmd/healthcheck: Daemon for checking the health of server daemons; useful when the hypervisor doesn't provide HTTP readiness/liveness probes (e.g., Docker engine).
+cmd/webapi: Web API server daemon.
+demo/: Demo configuration file.
+doc/: Documentation (typically, for APIs, this means an OpenAPI file).
+service/: Packages implementing project-specific functionalities.
+service/api: API server implementation.
+service/globaltime: Wrapper package for time.Time (useful in unit testing).
+vendor/: Managed by Go, contains a copy of all dependencies.
+webui/: Web frontend in Vue.js; includes:
+Bootstrap JavaScript framework.
+Customized version of the "Bootstrap dashboard" template.
+Feather icons as SVG.
+Go code for release embedding.
+Other project files include:
 
-Go (v1.16 or higher recommended)
-SQLite
-Build and Run:
+open-node.sh: Starts a new (temporary) container using the node:20 image for safe and secure web frontend development.
+Go Vendoring
+This project uses Go Vendoring. After modifying dependencies (go get or go mod tidy), run go mod vendor and commit all files under the vendor/ directory.
 
-Open a terminal in the project root and execute:
+For more information about vendoring:
+
+Go Modules: Vendoring
+Go Modules 06: Vendoring
+Node/YARN Vendoring
+This repository uses yarn and a vendoring technique that exploits the "Offline mirror". Commit the files inside the .yarn directory.
+
+How to Set Up a New Project from This Template
+Change the Go module path to your module path in go.mod, go.sum, and in *.go files throughout the project.
+Rewrite the API documentation in doc/api.yaml.
+If no web frontend is expected, remove webui and cmd/webapi/register-webui.go.
+Update the top/package comment inside cmd/webapi/main.go to reflect the actual project usage, goal, and general info.
+Update the code in the run() function (cmd/webapi/main.go) to connect to databases or external resources.
+Write API code inside service/api, and create any further packages inside service/ (or subdirectories).
+How to Build
+If you're not using the WebUI, or if you don't want to embed the WebUI into the final executable:
+
+bash
+Copy
+Edit
+go build ./cmd/webapi/
+If you're using the WebUI and want to embed it into the final executable:
+
+bash
+Copy
+Edit
+./open-node.sh
+# Inside the container:
+yarn run build-embed
+exit
+# Outside the container:
+go build -tags webui ./cmd/webapi/
+How to Run (in Development Mode)
+To launch the backend only:
 
 bash
 Copy
 Edit
 go run ./cmd/webapi/
-By default, the server listens on port 3000. You can adjust settings (such as API host, database file, and timeouts) via command-line flags or by editing the configuration file (default location: /conf/config.yml).
-
-Frontend
-Prerequisites:
-
-Node.js (LTS version recommended)
-npm or yarn
-Build:
-
-To build the distribution, run:
+To launch the WebUI, open a new terminal tab and run:
 
 bash
 Copy
 Edit
+./open-node.sh
+# Inside the container:
+yarn run dev
+How to Build for Production / Homework Delivery
+bash
+Copy
+Edit
+./open-node.sh
+# Inside the container:
 yarn run build-prod
-Run:
+For "Web and Software Architecture" students: before committing and pushing your work for grading, please read the section below named "My build works when I use yarn run dev, however there is a Javascript crash in production/grading".
 
-To preview the application, execute:
+Known Issues
+My Build Works When I Use yarn run dev, However There Is a JavaScript Crash in Production/Grading
+Some errors in the code may not appear in vite development mode. To preview the code as it will be in production/grading settings, use the following commands:
 
 bash
 Copy
 Edit
+./open-node.sh
+# Inside the container:
+yarn run build-prod
 yarn run preview
-Docker
-The project includes Dockerfiles for both the backend and frontend. Use the following commands to build and run container images:
-
-Build Container Images
-Backend:
-
-bash
-Copy
-Edit
-docker build -t wasatext-backend:latest -f Dockerfile.backend .
-Frontend:
-
-bash
-Copy
-Edit
-docker build -t wasatext-frontend:latest -f Dockerfile.frontend .
-Run Container Images
-Backend:
-
-bash
-Copy
-Edit
-docker run -it --rm -p 3000:3000 wasatext-backend:latest
-Frontend:
-
-bash
-Copy
-Edit
-docker run -it --rm -p 8080:80 wasatext-frontend:latest
-Configuration
-The backend configuration is read from command-line flags and an optional YAML file (default: /conf/config.yml). Use these settings to modify the API host, database location, read/write timeouts, and other parameters.
+License
+See LICENSE.
