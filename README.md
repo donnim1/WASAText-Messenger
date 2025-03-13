@@ -1,115 +1,104 @@
-# Fantastic coffee (decaffeinated)
+# WASAText Messenger
 
-This repository contains the basic structure for [Web and Software Architecture](http://gamificationlab.uniroma1.it/en/wasa/) homework project.
-It has been described in class.
+WASAText is a web-based messaging application that provides both one-on-one and group chat functionalities along with features such as file attachments, message reactions, and message forwarding. The project is built on a Go backend (using SQLite as the datastore) and a Vue.js frontend.
 
-"Fantastic coffee (decaffeinated)" is a simplified version for the WASA course, not suitable for a production environment.
-The full version can be found in the "Fantastic Coffee" repository.
+## Features
 
-## Project structure
+- **Direct & Group Messaging:** Start private conversations or create groups.
+- **File Attachments:** Send images and GIFs.
+- **Message Reactions:** React to messages (e.g., like with a ❤️).
+- **Forwarding & Replying:** Forward messages to other chats and reply with context.
+- **Profile Management:** Update your username and profile photo.
+- **User Search:** Find contacts by username.
 
-* `cmd/` contains all executables; Go programs here should only do "executable-stuff", like reading options from the CLI/env, etc.
-	* `cmd/healthcheck` is an example of a daemon for checking the health of servers daemons; useful when the hypervisor is not providing HTTP readiness/liveness probes (e.g., Docker engine)
-	* `cmd/webapi` contains an example of a web API server daemon
-* `demo/` contains a demo config file
-* `doc/` contains the documentation (usually, for APIs, this means an OpenAPI file)
-* `service/` has all packages for implementing project-specific functionalities
-	* `service/api` contains an example of an API server
-	* `service/globaltime` contains a wrapper package for `time.Time` (useful in unit testing)
-* `vendor/` is managed by Go, and contains a copy of all dependencies
-* `webui/` is an example of a web frontend in Vue.js; it includes:
-	* Bootstrap JavaScript framework
-	* a customized version of "Bootstrap dashboard" template
-	* feather icons as SVG
-	* Go code for release embedding
+## Technologies Used
 
-Other project files include:
-* `open-node.sh` starts a new (temporary) container using `node:20` image for safe and secure web frontend development (you don't want to use `node` in your system, do you?).
+### Backend
+- **Go:** Core business logic and API server.
+- **SQLite:** Embedded database.
+- **[httprouter](https://github.com/julienschmidt/httprouter):** Lightweight routing.
+- **[logrus](https://github.com/sirupsen/logrus):** Structured logging.
+- **[uuid](https://github.com/gofrs/uuid):** Unique identifier generation.
 
-## Go vendoring
+### Frontend
+- **Vue.js:** Reactive UI framework.
+- **Vue Router:** SPA navigation.
+- **Axios:** HTTP client for API calls.
+- **Bootstrap & Custom CSS:** Responsive design 
 
-This project uses [Go Vendoring](https://go.dev/ref/mod#vendoring). You must use `go mod vendor` after changing some dependency (`go get` or `go mod tidy`) and add all files under `vendor/` directory in your commit.
+## Setup & Running the Application on your local machine
 
-For more information about vendoring:
+### Backend
 
-* https://go.dev/ref/mod#vendoring
-* https://www.ardanlabs.com/blog/2020/04/modules-06-vendoring.html
+1. **Prerequisites:**
+   - [Go](https://golang.org/dl/) (v1.16 or higher recommended)
+   - SQLite
 
-## Node/YARN vendoring
+2. **Build and Run**
 
-This repository uses `yarn` and a vendoring technique that exploits the ["Offline mirror"](https://yarnpkg.com/features/caching). As for the Go vendoring, the dependencies are inside the repository.
+   Open a terminal in the project root and run:
 
-You should commit the files inside the `.yarn` directory.
+   ```bash
+   go run ./cmd/webapi/
+   ```
 
-## How to set up a new project from this template
+   By default, the server listens on port `3000`. You can adjust settings (such as API host, database file, and timeouts) via command-line flags or by editing the configuration file (default location: `/conf/config.yml`).
 
-You need to:
+### Frontend
 
-* Change the Go module path to your module path in `go.mod`, `go.sum`, and in `*.go` files around the project
-* Rewrite the API documentation `doc/api.yaml`
-* If no web frontend is expected, remove `webui` and `cmd/webapi/register-webui.go`
-* Update top/package comment inside `cmd/webapi/main.go` to reflect the actual project usage, goal, and general info
-* Update the code in `run()` function (`cmd/webapi/main.go`) to connect to databases or external resources
-* Write API code inside `service/api`, and create any further package inside `service/` (or subdirectories)
+1. **Prerequisites:**
+   - [Node.js](https://nodejs.org/) (LTS version recommended)
+   - npm or yarn
 
-## How to build
+2. **Build:**
 
-If you're not using the WebUI, or if you don't want to embed the WebUI into the final executable, then:
+   Build dist with:
 
-```shell
-go build ./cmd/webapi/
-```
+   ```bash
+   yarn run build-prod
+   ```
 
-If you're using the WebUI and you want to embed it into the final executable:
+3. **Run:**
 
-```shell
-./open-node.sh
-# (here you're inside the container)
-yarn run build-embed
-exit
-# (outside the container)
-go build -tags webui ./cmd/webapi/
-```
 
-## How to run (in development mode)
+   ```bash
+   yarn run preview
+   ```
 
-You can launch the backend only using:
+## Docker
 
-```shell
-go run ./cmd/webapi/
-```
+The project includes Dockerfiles for both the backend and frontend. Use the following commands to build and run container images:
 
-If you want to launch the WebUI, open a new tab and launch:
+### Build Container Images
 
-```shell
-./open-node.sh
-# (here you're inside the container)
-yarn run dev
-```
+- **Backend:**
 
-## How to build for production / homework delivery
+  ```bash
+  docker build -t wasatext-backend:latest -f Dockerfile.backend .
+  ```
 
-```shell
-./open-node.sh
-# (here you're inside the container)
-yarn run build-prod
-```
+- **Frontend:**
 
-For "Web and Software Architecture" students: before committing and pushing your work for grading, please read the section below named "My build works when I use `yarn run dev`, however there is a Javascript crash in production/grading"
+  ```bash
+  docker build -t wasatext-frontend:latest -f Dockerfile.frontend .
+  ```
 
-## Known issues
+### Run Container Images
 
-### My build works when I use `yarn run dev`, however there is a Javascript crash in production/grading
+- **Backend:**
 
-Some errors in the code are somehow not shown in `vite` development mode. To preview the code that will be used in production/grading settings, use the following commands:
+  ```bash
+  docker run -it --rm -p 3000:3000 wasatext-backend:latest
+  ```
 
-```shell
-./open-node.sh
-# (here you're inside the container)
-yarn run build-prod
-yarn run preview
-```
+- **Frontend:**
 
-## License
+  ```bash
+  docker run -it --rm -p 8080:80 wasatext-frontend:latest
+  ```
 
-See [LICENSE](LICENSE).
+
+
+## Configuration
+
+The backend configuration is read from command-line flags and an optional YAML file (default: `/conf/config.yml`). Use these settings to modify the API host, database location, read/write timeouts, and other parameters.
