@@ -137,8 +137,14 @@
           <button class="close-button" @click="closeAddUserModal">&times;</button>
         </div>
         <div class="modal-body">
+          <input
+            type="text"
+            v-model="userSearchQuery"
+            placeholder="Search users..."
+            class="search-input"
+          />
           <ul>
-            <li v-for="user in availableUsers" :key="user.id" @click="addUser(user)">
+            <li v-for="user in filteredAvailableUsers" :key="user.id" @click="addUser(user)">
               {{ user.username }}
             </li>
           </ul>
@@ -153,7 +159,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import {
   createGroup,
   addUserToGroupByUsername,
@@ -179,11 +185,21 @@ export default {
     const showUpdateModal = ref(false);
     const showAddUserModal = ref(false);
     const availableUsers = ref([]);
+    const userSearchQuery = ref("");
+    const loggedInUserID = localStorage.getItem("userID") || "";
     const selectedGroup = ref(null);
     const updateGroupName = ref("");
     const updateGroupPhoto = ref("");
 
     let refreshInterval = null;
+
+    // Computed property to filter users based on search query and exclude logged in user.
+    const filteredAvailableUsers = computed(() => {
+      return availableUsers.value.filter(user => 
+        user.id !== loggedInUserID &&
+        user.username.toLowerCase().includes(userSearchQuery.value.toLowerCase())
+      );
+    });
 
     async function createGroupHandler() {
       message.value = "";
@@ -238,7 +254,8 @@ export default {
       selectedGroup.value = groups.value.find(g => g.id === groupId);
       try {
         const response = await listUsers();
-        availableUsers.value = response.data.users || [];
+        // Exclude logged in user while assigning.
+        availableUsers.value = response.data.users.filter(u => u.id !== loggedInUserID) || [];
         showAddUserModal.value = true;
       } catch (err) {
         error.value = "Failed to load users";
@@ -343,6 +360,8 @@ export default {
       closeUpdateModal,
       showAddUserModal,
       availableUsers,
+      userSearchQuery,
+      filteredAvailableUsers,
       addUser,
       closeAddUserModal,
       handleUpdateGroupPhotoUpload,

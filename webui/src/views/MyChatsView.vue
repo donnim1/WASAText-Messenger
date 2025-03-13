@@ -26,14 +26,18 @@
             <div class="conversation-content">
               <div class="conversation-header">
                 <h3 class="conversation-name">{{ conv.name }}</h3>
-                <span class="timestamp">{{ conv.created_at }}</span>
+                <span class="timestamp">{{ formatTimestamp(conv.last_message_sent_at) }}</span>
               </div>
-              <p class="last-message">
-                {{ conv.last_message_content || 'No messages yet.' }}
-              </p>
-              <span class="timestamp">
-                {{ formatTimestamp(conv.last_message_sent_at) }}
-              </span>
+              <div class="last-message-preview">
+                <template v-if="isImage(conv.last_message_content)">
+                  <p class="last-message">Image</p>
+                </template>
+                <template v-else>
+                  <p class="last-message">
+                    {{ conv.last_message_content || 'No messages yet.' }}
+                  </p>
+                </template>
+              </div>
             </div>
           </div>
         </div>
@@ -98,6 +102,17 @@ export default {
     const defaultPhoto = "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
     let refreshInterval = null;
 
+    // Helper to check if given content is an image
+    const isImage = (content) => {
+      if (!content) return false;
+      // Check for a Base64 image URL
+      if (content.startsWith("data:image/")) return true;
+      // Otherwise, check for a normal HTTP/HTTPS image URL based on common extensions.
+      const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
+      const pattern = new RegExp(`https?://.*\\.(${imageExtensions.join("|")})(\\?.*)?$`, "i");
+      return pattern.test(content);
+    };
+
     async function loadConversations() {
       conversationsError.value = "";
       try {
@@ -125,7 +140,7 @@ export default {
       }
     }
 
-    // Define filteredUsers computed property for contacts filtering
+    // Filtered contacts computed property.
     const filteredUsers = computed(() => {
       if (!userSearchQuery.value) return users.value;
       const query = userSearchQuery.value.toLowerCase();
@@ -141,7 +156,6 @@ export default {
     function openChatWithUser(user) {
       getConversationByReceiver(user.id)
         .then(response => {
-          // Open chat if conversation exists
           router.push({
             name: "ChatView",
             params: { conversationId: response.data.conversationId }
@@ -149,7 +163,6 @@ export default {
         })
         .catch(error => {
           if (error.response && error.response.status === 404) {
-            // If conversation doesn't exist, navigate with receiver's ID to start a new conversation
             router.push({
               name: "ChatView",
               params: { conversationId: "" },
@@ -180,21 +193,16 @@ export default {
     }
 
     onMounted(() => {
-      // Initial data load
       loadConversations();
       loadUsers();
-
-      // Auto-refresh every half second
       refreshInterval = setInterval(() => {
         loadConversations();
         loadUsers();
-      }, 500); // Changed from 1000 to 500ms
+      }, 500);
     });
 
     onUnmounted(() => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
+      if (refreshInterval) clearInterval(refreshInterval);
     });
 
     return {
@@ -211,7 +219,8 @@ export default {
       openConversation,
       openChatWithUser,
       formatTimestamp,
-      defaultPhoto
+      defaultPhoto,
+      isImage  // Export the helper to use in the template
     };
   },
 };
@@ -450,5 +459,13 @@ export default {
 .conversations-list::-webkit-scrollbar-thumb:hover,
 .contacts-list::-webkit-scrollbar-thumb:hover {
   background-color: #adb5bd;
+}
+
+.conversation-image-preview {
+  max-width: 100px;
+  max-height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-top: 5px;
 }
 </style>

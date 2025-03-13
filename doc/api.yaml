@@ -732,6 +732,7 @@ paths:
         - user
       summary: Retrieve list of users
       description: Retrieves a list of all users. This endpoint can be used to search for users when starting new conversations.
+      operationId: listUsers
       security:
         - bearerAuth: []
       responses:
@@ -759,6 +760,7 @@ paths:
         - conversations
       summary: Retrieve conversation by receiver
       description: Retrieves the conversation between the authenticated user and the specified receiver. If no conversation exists, an appropriate error is returned.
+      operationId: GetConversationByReceiver
       security:
         - bearerAuth: []
       parameters:
@@ -786,6 +788,7 @@ paths:
         - messages
       summary: Remove a comment from a message
       description: Removes a comment (reaction) from a message. The authenticated user may only remove their own comment.
+      operationId: uncommentMessage
       security:
         - bearerAuth: []
       parameters:
@@ -817,6 +820,7 @@ paths:
         - groups
       summary: List groups
       description: Retrieves a list of groups the authenticated user is a member of.
+      operationId: listGroups
       security:
         - bearerAuth: []
       responses:
