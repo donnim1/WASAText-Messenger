@@ -154,13 +154,6 @@
         <button @click="cancelReply">✕</button>
       </div>
     </div>
-
-    <button 
-      @click="testClickForward"
-      class="btn" 
-      style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: red; color: white;">
-      TEST FORWARD
-    </button>
   </div>
 </template>
 
@@ -521,9 +514,7 @@ export default {
       
       // Get the necessary IDs
       const messageId = messageToForward.value.ID || messageToForward.value.id;
-      const targetId = forwardTargetConversation.value.id || 
-                     forwardTargetConversation.value.ID || 
-                     forwardTargetConversation.value.conversationId;
+      const targetId = forwardTargetConversation.value.id;
       
       if (!messageId || !targetId) {
         chatError.value = "Invalid message or conversation";

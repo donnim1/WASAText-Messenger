@@ -440,6 +440,51 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /messages/{messageId}/status/{status}:
+    post:
+      tags:
+        - messages
+      summary: Update message status
+      description: Updates the status of a message to delivered or read.
+      operationId: updateMessageStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+          description: The unique identifier of the message.
+        - in: path
+          name: status
+          required: true
+          schema:
+            type: string
+            enum:
+              - delivered
+              - read
+          description: The new status of the message.
+      responses:
+        '200':
+          description: Message status updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messageId:
+                    $ref: '#/components/schemas/Uuid'
+                  status:
+                    type: string
+                    example: "read"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /group:
     post:
       tags:
@@ -681,7 +726,6 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  
   /users:
     get:
       tags:
@@ -795,8 +839,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalError'
-
-
 
 components:
   securitySchemes:
