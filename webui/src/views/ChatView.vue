@@ -28,13 +28,14 @@
           
           <!-- Display reactions if available -->
           <div v-if="msg.reactions && msg.reactions.length" class="message-reactions">
-            <span 
-              v-for="(reaction, index) in msg.reactions" 
-              :key="index" 
-              class="reaction"
-            >
-              {{ reaction.Reaction }} by <small>{{ reaction.UserName }}</small>
-            </span>
+            <template v-for="(group, idx) in groupReactions(msg.reactions)" :key="idx">
+              <span class="reaction">
+                {{ group.reaction }}<span v-if="group.count > 1"> ({{ group.count }})</span>
+                <small v-if="group.userNames.length" title="Reacted by: {{ group.userNames.join(', ') }}">
+                  {{ group.userNames.join(', ') }}
+                </small>
+              </span>
+            </template>
           </div>
 
           <span class="message-timestamp">{{ formatTimestamp(msg.SentAt) }}</span>
@@ -663,6 +664,19 @@ export default {
       });
     }
 
+    const groupReactions = (reactions) => {
+      const groups = {};
+      reactions.forEach(r => {
+        const key = r.reaction;
+        if (!groups[key]) {
+          groups[key] = { reaction: key, count: 0, userNames: [] };
+        }
+        groups[key].count++;
+        groups[key].userNames.push(r.userName);
+      });
+      return Object.values(groups);
+    };
+
     return {
       conversationTitle,
       messages,
@@ -695,7 +709,7 @@ export default {
       getReplyContent, // <-- Added here
       removeReaction, // <-- Added here
       selectForwardTarget, // <-- Added here
-       // <-- Added here
+      groupReactions // <-- Added here
     };
   },
 };
