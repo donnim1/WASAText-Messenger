@@ -66,42 +66,6 @@ WASAText Messenger is a web-based, real-time messaging application offering both
    yarn run preview
    ```
 
-## Docker
+## License
 
-Dockerfiles are provided for both the backend and frontend, allowing you to build container images for deployment.
-
-### Build Container Images
-
-- **Backend:**
-
-  ```bash
-  docker build -t wasatext-backend:latest -f Dockerfile.backend .
-  ```
-
-- **Frontend:**
-
-  ```bash
-  docker build -t wasatext-frontend:latest -f Dockerfile.frontend .
-  ```
-
-### Run Container Images
-
-- **Backend:**
-
-  ```bash
-  docker run -it --rm -p 3000:3000 wasatext-backend:latest
-  ```
-
-- **Frontend:**
-
-  ```bash
-  docker run -it --rm -p 8080:80 wasatext-frontend:latest
-  ```
-
-## Configuration
-
-The application reads backend configuration settings from command-line flags and an optional YAML configuration file (default location: `/conf/config.yml`). Adjust these settings to change the API host, database file location, timeout values, and other parameters.
-
----
-
-Happy chatting with WASAText Messenger!
+See [LICENSE](LICENSE).
