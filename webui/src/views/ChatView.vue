@@ -786,20 +786,23 @@ export default {
   justify-content: flex-start;
 }
 
-/* Message bubble styling for a modern look */
+/* Updated message bubble styling */
 .message-bubble {
   position: relative;
   padding: 12px 16px;
   border-radius: 20px;
   max-width: 70%;
   word-wrap: break-word;
-  background-color: #fff;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff; /* a clean white for received messages */
+  border: 1px solid #e0e0e0; /* subtle border */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* softer shadow */
 }
 
-/* Different background for sent messages */
+/* For sent messages, use a complementary background */
 .message-wrapper.sent .message-bubble {
   background-color: #dcf8c6;
+  border: 1px solid #c7e9b0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Message content and timestamp */
@@ -1109,8 +1112,19 @@ export default {
   color: #888;
 }
 
-/* When the message is read, show a blue-colored double checkmark */
+/* Updated checkmark styling for neat look */
+.message-status i {
+  font-size: 0.9rem;
+  vertical-align: middle;
+  padding: 3px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  color: #555;
+}
+
 .message-status .read {
-  color: #3498db;
+  background-color: #4fc3f7; /* a neat blue background */
+  color: white !important;
+  padding: 3px 5px; /* slightly larger padding */
 }
 </style>
