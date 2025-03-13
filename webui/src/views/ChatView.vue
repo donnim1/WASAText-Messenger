@@ -131,7 +131,7 @@
         <div class="forward-modal-footer">
           <button 
             @click="confirmForwardMessage" 
-            :disabled="!forwardTargetConversation" 
+            :disabled="!isForwardEnabled" 
             class="btn forward-btn"
             style="cursor: pointer !important; position: relative !important; z-index: 9999 !important;">
             Forward
@@ -677,6 +677,12 @@ export default {
       return Object.values(groups);
     };
 
+    const isForwardEnabled = computed(() => {
+      const msgId = messageToForward.value ? (messageToForward.value.ID || messageToForward.value.id) : null;
+      const targetId = forwardTargetConversation.value ? (forwardTargetConversation.value.id || forwardTargetConversation.value.ID) : null;
+      return !!(msgId && targetId);
+    });
+
     return {
       conversationTitle,
       messages,
@@ -709,7 +715,8 @@ export default {
       getReplyContent, // <-- Added here
       removeReaction, // <-- Added here
       selectForwardTarget, // <-- Added here
-      groupReactions // <-- Added here
+      groupReactions, // <-- Added here
+      isForwardEnabled // <-- Added here
     };
   },
 };
