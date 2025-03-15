@@ -65,12 +65,13 @@
             />
           </div>
           <div class="form-group">
-            <label for="group-photo">Group Photo URL</label>
+            <!-- Changed from text input to file input -->
+            <label for="group-photo-upload">Group Photo</label>
             <input
-              id="group-photo"
-              v-model="groupPhoto"
-              type="text"
-              placeholder="Enter photo URL (optional)"
+              id="group-photo-upload"
+              type="file"
+              accept="image/*"
+              @change="handleGroupPhotoUpload"
             />
           </div>
           <div class="modal-actions">
@@ -162,13 +163,13 @@
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import {
   createGroup,
-  addUserToGroupByUsername,
+  uploadGroupImage,
   leaveGroup,
   listUserGroups,
   listUsers,
+  addUserToGroupByUsername,
   setGroupName,
   setGroupPhoto,
-  uploadGroupImage,
 } from "@/services/api.js";
 
 export default {
@@ -176,8 +177,9 @@ export default {
   setup() {
     // Reactive state
     const groupName = ref("");
-    const groupPhoto = ref("");
     const groups = ref([]);
+    // Instead of groupPhoto (string URL) use a file ref
+    const groupPhotoFile = ref(null);
     const message = ref("");
     const error = ref("");
     const defaultGroupPhoto = ref("https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg");
@@ -205,15 +207,33 @@ export default {
       message.value = "";
       error.value = "";
       try {
-        await createGroup({
+        // Create group without photo first. Assuming your backend accepts an empty photo.
+        const groupResponse = await createGroup({
           groupName: groupName.value,
-          groupPhoto: groupPhoto.value,
+          // Pass an empty string or null for photo if no file is provided.
+          groupPhoto: ""
         });
         message.value = "Group created successfully";
-        groupName.value = "";
-        groupPhoto.value = "";
+        // Clear the create group modal inputs
         showCreateGroupModal.value = false;
-        // Refresh groups after creation
+        const newGroupId = groupResponse.data.groupId || groupResponse.data.id; // Adjust based on backend response
+        
+        // If a photo file was selected, upload it and update the group photo.
+        if (groupPhotoFile.value && newGroupId) {
+          const formData = new FormData();
+          formData.append("photo", groupPhotoFile.value);
+          try {
+            // uploadGroupImage expects a group id and a FormData object.
+            const uploadResponse = await uploadGroupImage(newGroupId, formData);
+            // Optionally, update the group photo immediately in your groups list after upload.
+            message.value += " and group photo updated successfully";
+          } catch (uploadErr) {
+            error.value = "Group created but failed to upload photo";
+            console.error(uploadErr);
+          }
+        }
+        groupName.value = "";
+        groupPhotoFile.value = null;
         await refreshGroups();
       } catch (err) {
         error.value = "Failed to create group";
@@ -328,6 +348,14 @@ export default {
       showUpdateModal.value = false;
     }
 
+    // New function to handle file selection for the create group modal
+    function handleGroupPhotoUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        groupPhotoFile.value = file;
+      }
+    }
+
     // Auto-refresh every half second
     onMounted(() => {
       refreshGroups();
@@ -342,7 +370,6 @@ export default {
 
     return {
       groupName,
-      groupPhoto,
       groups,
       message,
       error,
@@ -365,6 +392,7 @@ export default {
       addUser,
       closeAddUserModal,
       handleUpdateGroupPhotoUpload,
+      handleGroupPhotoUpload,
     };
   },
 };

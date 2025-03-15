@@ -800,8 +800,8 @@ export default {
 
 /* For sent messages, use a complementary background */
 .message-wrapper.sent .message-bubble {
-  background-color: #dcf8c6;
-  border: 1px solid #c7e9b0;
+  background-color: #e7f3fe; /* softer blue */
+  border: 1px solid #c2e0f4;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -859,15 +859,18 @@ export default {
   padding: 15px 20px;
   background-color: #fff;
   border-top: 1px solid #e0e0e0;
+  width: 100%;
 }
 
 .chat-input-form {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
 .chat-input-form input {
-  flex: 1;
+  flex: 1;                   /* Grow to fill available space */
+  width: 100%;               /* Ensure full width */
   padding: 12px 15px;
   border: 1px solid #ccc;
   border-radius: 20px;
@@ -1114,17 +1117,14 @@ export default {
 
 /* Updated checkmark styling for neat look */
 .message-status i {
-  font-size: 0.9rem;
-  vertical-align: middle;
-  padding: 3px;
-  border-radius: 50%;
-  background-color: #f0f0f0;
-  color: #555;
+  font-size: 1rem;            /* Slightly larger for clarity */
+  margin-left: 2px;           /* Small margin */
+  background: transparent;    /* Remove background & border */
+  padding: 0;
+  color: #a0a0a0;             /* Default grey for sent/delivered status */
 }
 
 .message-status .read {
-  background-color: #4fc3f7; /* a neat blue background */
-  color: white !important;
-  padding: 3px 5px; /* slightly larger padding */
+  color: #34B7F1 !important;
 }
 </style>
