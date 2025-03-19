@@ -472,11 +472,19 @@ paths:
             application/json:
               schema:
                 type: object
+                description: An object indicating the status update result.
+                required:
+                  - messageId
+                  - status
                 properties:
                   messageId:
                     $ref: '#/components/schemas/Uuid'
                   status:
                     type: string
+                    description: The updated status of the message.
+                    pattern: "^(delivered|read)$"
+                    minLength: 1
+                    maxLength: 10
                     example: "read"
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -749,6 +757,8 @@ paths:
                   users:
                     type: array
                     description: Array of user objects.
+                    minItems: 0
+                    maxItems: 1000
                     items:
                       $ref: '#/components/schemas/User'
         '500':
@@ -837,6 +847,8 @@ paths:
                   groups:
                     type: array
                     description: Array of group conversations.
+                    minItems: 0
+                    maxItems: 1000
                     items:
                       $ref: '#/components/schemas/Conversation'
         '401':
@@ -865,12 +877,18 @@ components:
           $ref: '#/components/schemas/Uuid'
         name:
           type: string
-          description: The username.
+          description: The username of the user.
+          pattern: "^[a-zA-Z0-9_-]{3,16}$"
+          minLength: 3
+          maxLength: 16
           example: "alice"
         photoUrl:
           type: string
           format: uri
           description: URL to the user's profile photo.
+          pattern: "^https://.+"
+          minLength: 10
+          maxLength: 2048
           example: "https://example.com/alice.jpg"
     Uuid:
       type: string
