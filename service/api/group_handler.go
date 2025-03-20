@@ -39,6 +39,7 @@ func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprout
 	var convs []Conversation
 	for _, group := range groups {
 		convs = append(convs, convertDBConversationToConversation(group))
+		// If using sql.Rows elsewhere, remember to call rows.Err() after the loop.
 	}
 
 	// Process conversations and format the response.
@@ -65,7 +66,7 @@ func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprout
 			Name:      conv.Name,
 			IsGroup:   conv.IsGroup,
 			CreatedAt: formattedCreatedAt,
-			PhotoUrl:  conv.PhotoUrl, // assign the group photo URL here
+			PhotoUrl:  conv.PhotoUrl,
 		})
 	}
 
@@ -90,7 +91,6 @@ type createGroupResponse struct {
 
 // createGroup handles POST /groups/create to create a new group.
 func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Validate the Authorization header and extract the authenticated user ID.
 	creatorID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -108,14 +108,12 @@ func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, _ httprou
 		return
 	}
 
-	// Call the database function to create a new group.
 	groupID, err := rt.db.CreateGroup(creatorID, req.GroupName, req.GroupPhoto)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create group: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Return the newly created group ID.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(createGroupResponse{GroupID: groupID}); err != nil {
@@ -123,23 +121,20 @@ func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 }
 
-// Modify the addToGroupRequest to include a Username instead of a user id.
+// addToGroupRequest defines the required fields for adding a user to a group.
 type addToGroupRequest struct {
 	GroupID  string `json:"groupId"`
-	Username string `json:"username"` // Required: target user's username
+	Username string `json:"username"` // Required: target user's username.
 }
 
-// addToGroup handles POST /groups/add and expects a GroupID and Username.
-// It looks up the target user's ID in the users table and adds that user to the group.
+// addToGroup handles POST /groups/add to add a user to a group.
 func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// Validate the Authorization header.
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Get the group ID from the URL parameter.
 	groupID := ps.ByName("groupId")
 	if groupID == "" {
 		http.Error(w, "Group ID is required", http.StatusBadRequest)
@@ -152,25 +147,20 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprou
 		return
 	}
 
-	// Use the group ID from the URL if not provided in the payload.
 	if req.GroupID == "" {
 		req.GroupID = groupID
 	}
-
-	// Both GroupID and Username must be provided.
 	if req.GroupID == "" || req.Username == "" {
 		http.Error(w, "Group ID and Username are required", http.StatusBadRequest)
 		return
 	}
 
-	// Look up the target user by username in the users table.
 	user, err := rt.db.GetUserByUsername(req.Username)
 	if err != nil || user == nil {
 		http.Error(w, "User not found", http.StatusBadRequest)
 		return
 	}
 
-	// Add the target user's ID to the group.
 	if err := rt.db.AddToGroup(req.GroupID, user.ID); err != nil {
 		http.Error(w, "Failed to add user to group: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -178,42 +168,33 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprou
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{
-		"message": "User added to group successfully",
-	}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "User added to group successfully"}); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
 }
 
-// leaveGroupRequest defines the expected JSON payload for leaving a group.
+// leaveGroupRequest defines the payload for leaving a group.
 type leaveGroupRequest struct {
 	GroupID string `json:"groupId"`
 }
 
 // leaveGroup handles DELETE /groups/leave to remove a user from a group.
 func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// Validate the Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Get the group ID from the URL parameter.
 	groupID := ps.ByName("groupId")
-
 	var req leaveGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && groupID == "" {
-		// Only error if no group ID is available
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
-
-	// Use the group ID from the URL if not provided in the request body.
 	if req.GroupID == "" {
 		req.GroupID = groupID
 	}
-
 	if req.GroupID == "" {
 		http.Error(w, "Group ID is required", http.StatusBadRequest)
 		return
@@ -229,25 +210,20 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprou
 	}
 }
 
-// Removed unused setGroupNameRequest as it is not used.
-
 // setGroupName handles PUT /groups/name to update a group's name.
 func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// Validate the Authorization header.
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Use the groupId from the URL parameter.
 	groupID := ps.ByName("groupId")
 	if groupID == "" {
 		http.Error(w, "Group ID is required", http.StatusBadRequest)
 		return
 	}
 
-	// Define a payload struct that only requires the new name.
 	var payload struct {
 		NewName string `json:"newName"`
 	}
@@ -255,7 +231,6 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httpr
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
-
 	if payload.NewName == "" {
 		http.Error(w, "New name is required", http.StatusBadRequest)
 		return
@@ -273,41 +248,34 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httpr
 	}
 }
 
-// setGroupPhotoRequest defines the expected JSON payload for updating a group's photo.
-
-// setGroupPhoto handles PUT /groups/photo to update a group's photo.
 // convertDBConversationToConversation converts a database.Conversation to an API Conversation.
-// Adjust the fields below as needed to match both types.
 func convertDBConversationToConversation(dbConv database.Conversation) Conversation {
 	return Conversation{
 		ID:       dbConv.ID,
 		Name:     dbConv.Name,
-		PhotoUrl: dbConv.PhotoUrl, // assuming database.Conversation has a Photo field instead of PhotoURL
-		// add other fields as needed
+		PhotoUrl: dbConv.PhotoUrl,
+		// Add other fields as needed.
 	}
 }
 
 func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// Validate the Authorization header.
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Extract the group ID from the URL parameter.
 	groupID := ps.ByName("groupId")
 	if groupID == "" {
 		http.Error(w, "Group ID is required", http.StatusBadRequest)
 		return
 	}
 
-	// Attempt file upload: check if a file with key "photo" is included.
+	// Attempt file upload: check if a file with key "photo" is provided.
 	file, header, err := r.FormFile("photo")
-	if err == nil { // A file upload is happening.
+	if err == nil {
 		defer file.Close()
 
-		// Create uploads directory if needed.
 		uploadDir := "uploads/"
 		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
 			log.Printf("❌ Failed to create upload directory: %v", err)
@@ -315,7 +283,6 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 			return
 		}
 
-		// Construct the file path. You might want to prefix with a timestamp or groupID.
 		filePath := filepath.Join(uploadDir, header.Filename)
 		out, err := os.Create(filePath)
 		if err != nil {
@@ -325,22 +292,18 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 		}
 		defer out.Close()
 
-		// Copy file contents.
 		if _, err := io.Copy(out, file); err != nil {
 			log.Printf("❌ Failed to write file: %v", err)
 			http.Error(w, "Failed to write file", http.StatusInternalServerError)
 			return
 		}
 
-		// Construct a new group photo URL.
-		// With this (using relative path instead):
-		photoUrl := fmt.Sprintf("/%s", filePath)
+		photoUrl := fmt.Sprintf("/%s", filepath.ToSlash(filePath))
 		if err := rt.db.SetGroupPhoto(groupID, photoUrl); err != nil {
 			http.Error(w, "Failed to update group photo: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Respond with the newly updated photo URL.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(map[string]string{"photoUrl": photoUrl}); err != nil {
@@ -350,7 +313,7 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 		return
 	}
 
-	// Fallback: try JSON-based photo URL update.
+	// Fallback: JSON-based photo URL update.
 	var payload struct {
 		PhotoUrl string `json:"photoUrl"`
 	}

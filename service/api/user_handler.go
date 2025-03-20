@@ -46,8 +46,7 @@ func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, _ httpr
 	}
 
 	// Update the username in the database using the authenticated user ID.
-	err = rt.db.UpdateUserName(authenticatedUserID, req.NewName)
-	if err != nil {
+	if err := rt.db.UpdateUserName(authenticatedUserID, req.NewName); err != nil {
 		http.Error(w, "Failed to update username: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -69,21 +68,22 @@ type userPhotoUpdateRequest struct {
 }
 
 // setMyPhoto updates the user's profile photo.
-// ✅ Fix the `setMyPhoto` function to handle both URL and file upload.
+// Fixes include handling both file upload and JSON-based photo update separately and
+// renaming error variables to avoid conflation.
 func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Extract authenticated user ID from JWT or session
+	// Extract authenticated user ID from JWT or session.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Try handling file upload
-	file, header, err := r.FormFile("photo")
-	if err == nil { // No error → File upload is happening
-		defer file.Close() // Ensure the file is closed properly
+	// Try handling file upload.
+	file, header, fileErr := r.FormFile("photo")
+	if fileErr == nil { // File upload is happening.
+		defer file.Close() // Ensure the file is closed properly.
 
-		// Ensure upload directory exists
+		// Ensure upload directory exists.
 		uploadDir := "uploads/"
 		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
 			log.Printf("❌ Failed to create upload directory: %v", err)
@@ -91,7 +91,7 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 			return
 		}
 
-		// Save file to uploads directory
+		// Save file to uploads directory.
 		filePath := filepath.Join(uploadDir, header.Filename)
 		out, err := os.Create(filePath)
 		if err != nil {
@@ -101,14 +101,14 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 		}
 		defer out.Close()
 
-		// Copy file contents
+		// Copy file contents.
 		if _, err := io.Copy(out, file); err != nil {
 			log.Printf("❌ Failed to write file: %v", err)
 			http.Error(w, "Failed to write file", http.StatusInternalServerError)
 			return
 		}
 
-		// Save file URL to database
+		// Convert file path to forward-slashed URL.
 		photoUrl := fmt.Sprintf("/%s", filepath.ToSlash(filePath))
 		if err := rt.db.UpdateUserPhoto(userID, photoUrl); err != nil {
 			log.Printf("❌ Database update failed: %v", err)
@@ -116,7 +116,7 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 			return
 		}
 
-		// Respond with the new photo URL
+		// Respond with the new photo URL.
 		response := map[string]string{"photoUrl": photoUrl}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -127,23 +127,21 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprout
 		return
 	}
 
-	// If file upload fails, try JSON-based photo update
+	// If file upload fails, try JSON-based photo update.
 	var req userPhotoUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+	if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr == nil {
 		if req.PhotoUrl == "" {
 			log.Println("❌ Invalid photo URL received")
 			http.Error(w, "Invalid photo URL", http.StatusBadRequest)
 			return
 		}
 
-		// Update database
 		if err := rt.db.UpdateUserPhoto(userID, req.PhotoUrl); err != nil {
 			log.Printf("❌ Database update failed: %v", err)
 			http.Error(w, "Failed to update photo URL", http.StatusInternalServerError)
 			return
 		}
 
-		// Respond with success
 		response := map[string]string{"photoUrl": req.PhotoUrl}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -173,8 +171,7 @@ type UserSummary struct {
 // listUsers handles GET requests to /users and returns all users.
 func (rt *_router) listUsers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// (Optional) Validate Authorization header if you want only authenticated users to view the list.
-	_, err := rt.getAuthenticatedUserID(r)
-	if err != nil {
+	if _, err := rt.getAuthenticatedUserID(r); err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -198,6 +195,7 @@ func (rt *_router) listUsers(w http.ResponseWriter, r *http.Request, _ httproute
 			Username: u.Username,
 			PhotoUrl: photo,
 		})
+		// If iterating through rows (if using sql.Rows), ensure after the loop to call rows.Err()
 	}
 
 	w.Header().Set("Content-Type", "application/json")

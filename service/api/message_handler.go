@@ -10,12 +10,12 @@ import (
 
 // MessageRequest defines the request format for sending a message.
 type MessageRequest struct {
-	ConversationID string `json:"conversationId"` // Add this field
-	ReceiverID     string `json:"receiverId"`     // Ensure uppercase "ID"
+	ConversationID string `json:"conversationId"` // Conversation ID
+	ReceiverID     string `json:"receiverId"`     // Receiver ID
 	Content        string `json:"content"`
 	IsGroup        bool   `json:"isGroup"`
-	GroupID        string `json:"groupId"`           // Ensure uppercase "ID"
-	ReplyTo        string `json:"replyTo,omitempty"` // Add this field
+	GroupID        string `json:"groupId"`           // Group ID
+	ReplyTo        string `json:"replyTo,omitempty"` // Optional reply-to field
 }
 
 // MessageResponse defines the response format.
@@ -24,8 +24,6 @@ type MessageResponse struct {
 	ConversationID string `json:"conversationId"`
 }
 
-// In your message handler file (e.g., message_handler.go)
-// In your message handler file (e.g., message_handler.go)
 func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Validate Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
@@ -33,6 +31,7 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprou
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+
 	// Decode request body.
 	var req MessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -41,8 +40,7 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 
 	// Validate required fields.
-	if req.Content == "" ||
-		(!req.IsGroup && req.ConversationID == "" && req.ReceiverID == "") {
+	if req.Content == "" || (!req.IsGroup && req.ConversationID == "" && req.ReceiverID == "") {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
@@ -74,7 +72,6 @@ type forwardMessageRequest struct {
 	// SenderID is removed because we use the token's userID.
 }
 
-// forwardMessage handles forwarding a message.
 func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Validate Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
@@ -103,7 +100,9 @@ func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps htt
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"messageId": newMessageID})
+	if err := json.NewEncoder(w).Encode(map[string]string{"messageId": newMessageID}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // commentMessageRequest defines the payload for commenting (reacting) on a message.
@@ -111,7 +110,6 @@ type commentMessageRequest struct {
 	Reaction string `json:"reaction"`
 }
 
-// commentMessage handles adding a reaction to a message.
 func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get authenticated user ID.
 	userID, err := rt.getAuthenticatedUserID(r)
@@ -150,7 +148,6 @@ func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps htt
 	}
 }
 
-// uncommentMessage handles DELETE /messages/:messageId/uncomment to remove a reaction.
 func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get authenticated user ID.
 	userID, err := rt.getAuthenticatedUserID(r)
@@ -177,7 +174,6 @@ func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps h
 	}
 }
 
-// deleteMessage handles DELETE /messages/:messageId/delete to delete a message.
 func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get authenticated user ID.
 	userID, err := rt.getAuthenticatedUserID(r)
@@ -205,27 +201,28 @@ func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps http
 		log.Printf("Error encoding response: %v", err)
 	}
 }
+
 func (rt *_router) updateMessageStatus(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-    // Get message ID and new status from URL parameters.
-    messageID := ps.ByName("messageId")
-    status := ps.ByName("status") // Expected values: "delivered" or "read"
-    if messageID == "" || status == "" {
-        http.Error(w, "Message ID and status are required", http.StatusBadRequest)
-        return
-    }
+	// Get message ID and new status from URL parameters.
+	messageID := ps.ByName("messageId")
+	status := ps.ByName("status") // Expected values: "delivered" or "read"
+	if messageID == "" || status == "" {
+		http.Error(w, "Message ID and status are required", http.StatusBadRequest)
+		return
+	}
 
-    // Retrieve the authenticated user's ID.
-    userID, err := rt.getAuthenticatedUserID(r)
-    if err != nil {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
+	// Retrieve the authenticated user's ID.
+	userID, err := rt.getAuthenticatedUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    // Update the message status in the database.
-    if err := rt.db.UpdateMessageStatus(messageID, status, userID); err != nil {
-        http.Error(w, "Failed to update message status: "+err.Error(), http.StatusInternalServerError)
-        return
-    }
+	// Update the message status in the database.
+	if err := rt.db.UpdateMessageStatus(messageID, status, userID); err != nil {
+		http.Error(w, "Failed to update message status: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }

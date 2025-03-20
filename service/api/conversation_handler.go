@@ -17,10 +17,11 @@ type ConversationResponse struct {
 }
 
 // GetConversationByReceiver handles requests to fetch a conversation by receiverID.
-// It expects the current user's ID to be provided via a header (e.g. "X-User-Id").
+// It expects the current user's ID to be provided via the Authorization header.
 // Route: GET /conversationsfor/:receiverId
 func (rt *_router) GetConversationByReceiver(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	receiverId := ps.ByName("receiverId")
+
 	// Extract current user ID from the Authorization header.
 	currentUserId, err := rt.getAuthenticatedUserID(r)
 	if err != nil || currentUserId == "" {
@@ -42,7 +43,7 @@ func (rt *_router) GetConversationByReceiver(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(res); err != nil {
-		log.Println("Error encoding conversation response:", err)
+		log.Printf("Error encoding conversation response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -55,15 +56,13 @@ type getMyConversationsResponse struct {
 
 // Conversation defines the API's conversation structure.
 type Conversation struct {
-	ID                 string `json:"id"`       // Conversation ID
-	Name               string `json:"name"`     // Name of the conversation (group name or null for private chats)
-	IsGroup            bool   `json:"is_group"` // True if it's a group chat, otherwise false
-	CreatedAt          string `json:"created_at"`
-	PhotoUrl           string `json:"group_photo"`
-	LastMessageContent string `json:"last_message_content"` // new field
-	LastMessageSentAt  string `json:"last_message_sent_at"`
-	// new field
-	// Timestamp of when the conversation was created
+	ID                 string `json:"id"`                   // Conversation ID
+	Name               string `json:"name"`                 // Name of the conversation (group name or null for private chats)
+	IsGroup            bool   `json:"is_group"`             // True if it's a group chat, otherwise false
+	CreatedAt          string `json:"created_at"`           // Formatted creation timestamp
+	PhotoUrl           string `json:"group_photo"`          // URL for the group or chat photo
+	LastMessageContent string `json:"last_message_content"` // Content from the last message
+	LastMessageSentAt  string `json:"last_message_sent_at"` // Timestamp of the last message
 }
 
 // getMyConversations retrieves all conversations for the authenticated user.
@@ -85,8 +84,7 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 	// 3. Convert each database conversation into the API's Conversation type.
 	var apiConversations []Conversation
 	for _, conv := range convs {
-		// For private chats (is_group false), if the conversation name is empty,
-		// try to get the chat partner's username and photo.
+		// For private chats (IsGroup false) with empty name, try to fetch the chat partner’s details.
 		if conv.Name == "" && !conv.IsGroup {
 			partner, err := rt.db.GetChatPartner(conv.ID, userID)
 			if err == nil && partner != nil {
@@ -98,6 +96,7 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 				}
 			}
 		}
+
 		// Parse and format the created_at timestamp.
 		var formattedCreatedAt string
 		t, err := time.Parse(time.RFC3339, conv.CreatedAt)
@@ -106,6 +105,7 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 		} else {
 			formattedCreatedAt = t.Format("2006-01-02 15:04:05")
 		}
+
 		apiConversations = append(apiConversations, Conversation{
 			ID:                 conv.ID,
 			Name:               conv.Name,
@@ -113,8 +113,9 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 			CreatedAt:          formattedCreatedAt,
 			PhotoUrl:           conv.PhotoUrl,
 			LastMessageContent: conv.LastMessageContent.String, // New field.
-			LastMessageSentAt:  conv.LastMessageSentAt.String,  // New field. // This field will contain either group_photo or private chat photo.
+			LastMessageSentAt:  conv.LastMessageSentAt.String,  // New field.
 		})
+		// (If you use sql.Rows in database functions, be sure to check rows.Err() after looping.)
 	}
 
 	// 4. Return the list of conversations.
@@ -154,7 +155,7 @@ func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps ht
 		return
 	}
 
-	// 4. For private chats with empty name, attempt to fetch the chat partner's details.
+	// 4. For private chats with an empty name, attempt to fetch the chat partner's details.
 	if !conv.IsGroup && conv.Name == "" {
 		partner, err := rt.db.GetChatPartner(conv.ID, currentUserId)
 		if err == nil && partner != nil {

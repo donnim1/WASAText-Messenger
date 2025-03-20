@@ -132,6 +132,10 @@ func (db *appdbimpl) GetConversationBetween(userID1, userID2 string) (*Conversat
 		}
 		messages = append(messages, msg)
 	}
+	// Check for any errors encountered during iteration.
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 
 	return &Conversation{
 		ID:       convID,
@@ -284,6 +288,10 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 			msg.ReplyTo = ""
 		}
 		messages = append(messages, msg)
+	}
+	// Check for iteration errors.
+	if err := rows.Err(); err != nil {
+		return &conv, messages, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	// Retrieve reactions for all messages in one query if there are any messages.
