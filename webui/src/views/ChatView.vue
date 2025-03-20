@@ -113,10 +113,10 @@
         <div class="forward-modal-body">
           <input v-model="forwardSearchQuery" class="forward-search-input" placeholder="Search chats or users" />
           <ul class="conversation-list">
-            <li v-if="filteredConversations.length === 0" class="no-results">
+            <li v-if="filteredForwardTargets.length === 0" class="no-results">
               No conversations found
             </li>
-            <li v-for="conv in filteredConversations" 
+            <li v-for="conv in filteredForwardTargets" 
                 :key="conv.id"
                 @click="selectForwardTarget(conv)"
                 :class="['conversation-item', { selected: forwardTargetConversation && ((conv.id || conv.ID) === (forwardTargetConversation.id || forwardTargetConversation.ID)) }]">
@@ -165,13 +165,14 @@ import {
   getConversation,
   sendMessage,
   getConversationByReceiver,
-  forwardMessageApi,  // Changed here: use the direct export name
+  forwardMessageApi,
   commentMessage as commentMessageApi,
   uncommentMessage as uncommentMessageApi,
   deleteMessage as deleteMessageApi,
   uploadImage,
-  getMyConversations, // Updated import—use getMyConversations instead of getConversations.
-  updateMessageStatus // make sure this is exported
+  getMyConversations,
+  listUsers,
+  updateMessageStatus
 } from "@/services/api.js";
 
 export default {
@@ -194,17 +195,16 @@ export default {
     const messageToForward = ref(null);
     const forwardSearchQuery = ref("");
     const conversations = ref([]);
+    const contacts = ref([]);
     const forwardTargetConversation = ref(null);
-    const selectedMessageId = ref(null);
-    const forwardTargetConversationId = ref("");
     const defaultPhoto = "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
 
     // For filtering conversation list
-    const filteredConversations = computed(() => {
-      if (!forwardSearchQuery.value) return conversations.value;
+    const filteredForwardTargets = computed(() => {
+      if (!forwardSearchQuery.value) return allForwardTargets.value;
       const query = forwardSearchQuery.value.toLowerCase();
-      return conversations.value.filter(conv =>
-        conv.name.toLowerCase().includes(query)
+      return allForwardTargets.value.filter(target =>
+        target.name.toLowerCase().includes(query)
       );
     });
 
@@ -280,7 +280,7 @@ export default {
       showForwardModal.value = true;
       forwardSearchQuery.value = "";
       forwardTargetConversation.value = null;
-      loadConversations();
+      loadForwardTargets();
     }
 
     function closeForwardModal() {
@@ -512,53 +512,83 @@ export default {
         chatError.value = "Please select a conversation to forward this message to";
         return;
       }
-      
-      // Get the necessary IDs
+    
+      // Determine the target conversation ID.
+      let targetConversationId = forwardTargetConversation.value.id || forwardTargetConversation.value.ID;
+      let newConversationCreated = false;
+    
+      // If the selected target is a contact (i.e. no existing conversation)
+      if (forwardTargetConversation.value.isContact) {
+        try {
+          const response = await getConversationByReceiver(forwardTargetConversation.value.id);
+          if (response.data && response.data.conversationId) {
+            targetConversationId = response.data.conversationId;
+          }
+        } catch (error) {
+          // If no conversation exists (404), create one by sending a message.
+          if (error.response && error.response.status === 404) {
+            try {
+              const payload = {
+                conversationId: "", // empty to trigger new conversation creation
+                receiverId: forwardTargetConversation.value.id,
+                content: messageToForward.value.Content, // forward the original message content
+                isGroup: false,
+                groupId: "",
+                replyTo: ""
+              };
+              const res = await sendMessage(payload);
+              if (res.data && res.data.conversationId) {
+                targetConversationId = res.data.conversationId;
+                newConversationCreated = true;
+              } else {
+                chatError.value = "Failed to create a new conversation for forwarding";
+                return;
+              }
+            } catch (err) {
+              chatError.value = "Failed to create a conversation for forwarding: " +
+                                 (err.response?.data || err.message);
+              return;
+            }
+          } else {
+            chatError.value = "Error checking conversation with contact; please try again later.";
+            return;
+          }
+        }
+      }
+    
+      // If a new conversation was created, the forward message has been sent as the first message.
+      if (newConversationCreated) {
+        chatError.value = `Message forwarded to ${forwardTargetConversation.value.name}!`;
+        router.push({
+          name: "ChatView",
+          params: { conversationId: targetConversationId },
+          query: {
+            receiverName: forwardTargetConversation.value.name,
+            isGroup: forwardTargetConversation.value.isGroup,
+          },
+        });
+        return;
+      }
+    
+      // Otherwise, forward using the existing conversation.
       const messageId = messageToForward.value.ID || messageToForward.value.id;
-      const targetId = forwardTargetConversation.value.id;
-      
-      if (!messageId || !targetId) {
+      if (!messageId || !targetConversationId) {
         chatError.value = "Invalid message or conversation";
         return;
       }
-      
+    
       try {
-        console.log(`Forwarding message ${messageId} to conversation ${targetId}`);
-        
-        // Make the API call
-        await forwardMessageApi(messageId, targetId);
-        
-        // Save the target conversation info before closing modal
-        const targetName = forwardTargetConversation.value.name;
-        const isTargetGroup = forwardTargetConversation.value.is_group;
-        
-        // Close modal and clear state
-        showForwardModal.value = false;
-        messageToForward.value = null;
-        
-        // Show success message
-        chatError.value = `Message forwarded to ${targetName}!`;
-        
-        // Option 1: Navigate to the target conversation immediately
-        router.push({ 
-          name: 'ChatView',
-          params: { conversationId: targetId },
-          query: { 
-            receiverName: targetName,
-            isGroup: isTargetGroup 
-          }
+        console.log(`Forwarding message ${messageId} to conversation ${targetConversationId}`);
+        await forwardMessageApi(messageId, targetConversationId);
+        chatError.value = `Message forwarded to ${forwardTargetConversation.value.name}!`;
+        router.push({
+          name: "ChatView",
+          params: { conversationId: targetConversationId },
+          query: {
+            receiverName: forwardTargetConversation.value.name,
+            isGroup: forwardTargetConversation.value.isGroup,
+          },
         });
-        
-        /* Option 2: Show a button to navigate (uncomment if preferred)
-        const shouldNavigate = confirm(`Message forwarded to ${targetName}. View conversation?`);
-        if (shouldNavigate) {
-          router.push({ 
-            name: 'conversation',
-            params: { conversationId: targetId } 
-          });
-        }
-        */
-        
       } catch (error) {
         console.error("Forward Message Error:", error);
         chatError.value = "Failed to forward message: " + (error.response?.data || error.message);
@@ -619,6 +649,43 @@ export default {
         conversations.value = [];
       }
     }
+
+    async function loadContacts() {
+      try {
+        const response = await listUsers();
+        // Assuming the response returns an object with a "users" array.
+        if (response.data && Array.isArray(response.data.users)) {
+          contacts.value = response.data.users;
+        } else {
+          contacts.value = [];
+        }
+      } catch (err) {
+        console.error("Error loading contacts:", err);
+        contacts.value = [];
+      }
+    }
+
+    async function loadForwardTargets() {
+      await Promise.all([loadConversations(), loadContacts()]);
+    }
+
+    const allForwardTargets = computed(() => {
+      // Map conversations to a target object.
+      const convTargets = conversations.value.map(c => ({
+        id: c.id || c.ID,
+        name: c.name || "Unnamed Chat",
+        isGroup: c.is_group // Existing conversation flag.
+      }));
+      // Map contacts to a target object.
+      const contactTargets = contacts.value.map(u => ({
+        id: u.id,
+        name: u.username,
+        isGroup: false,
+        isContact: true
+      }));
+      // Optionally, you could remove duplicates if a conversation already exists with that contact.
+      return convTargets.concat(contactTargets);
+    });
 
     async function markMessagesAsRead() {
       const unread = messages.value.filter(
@@ -698,7 +765,9 @@ export default {
       messageToForward,
       forwardSearchQuery,
       conversations,
-      filteredConversations,
+      contacts,
+      allForwardTargets, // merged array
+      filteredForwardTargets, // list filtered by search query
       defaultPhoto,
       showForwardDialog,
       closeForwardModal,
@@ -716,7 +785,8 @@ export default {
       removeReaction, // <-- Added here
       selectForwardTarget, // <-- Added here
       groupReactions, // <-- Added here
-      isForwardEnabled // <-- Added here
+      isForwardEnabled, // <-- Added here
+      loadForwardTargets // <-- Added here
     };
   },
 };
