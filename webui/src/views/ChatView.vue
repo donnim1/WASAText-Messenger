@@ -528,10 +528,12 @@ export default {
           // If no conversation exists (404), create one by sending a message.
           if (error.response && error.response.status === 404) {
             try {
+              // Prepend "forwarded from you:" to the original message content.
+              const forwardedContent = `forwarded from you: ${messageToForward.value.Content || messageToForward.value.content}`;
               const payload = {
                 conversationId: "", // empty to trigger new conversation creation
                 receiverId: forwardTargetConversation.value.id,
-                content: messageToForward.value.Content, // forward the original message content
+                content: forwardedContent,
                 isGroup: false,
                 groupId: "",
                 replyTo: ""
