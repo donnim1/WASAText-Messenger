@@ -542,20 +542,29 @@ export default {
   color: #212529;
 }
 
-
-
 .group-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap; /* in case buttons need to wrap on smaller screens */
 }
 
 .action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px 12px;
   border: none;
   border-radius: 6px;
   font-size: 0.8rem;
   cursor: pointer;
   transition: background-color 0.2s;
+}
+
+.action-button.members {
+  background-color: #f59f00;
+  color: white;
+  min-width: 80px; /* ensures a consistent size */
 }
 
 .action-button.edit {
@@ -570,11 +579,6 @@ export default {
 
 .action-button.leave {
   background-color: #ff6b6b;
-  color: white;
-}
-
-.action-button.members {
-  background-color: #f59f00;
   color: white;
 }
 
