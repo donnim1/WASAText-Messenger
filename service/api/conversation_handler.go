@@ -56,13 +56,14 @@ type getMyConversationsResponse struct {
 
 // Conversation defines the API's conversation structure.
 type Conversation struct {
-	ID                 string `json:"id"`                   // Conversation ID
-	Name               string `json:"name"`                 // Name of the conversation (group name or null for private chats)
-	IsGroup            bool   `json:"is_group"`             // True if it's a group chat, otherwise false
-	CreatedAt          string `json:"created_at"`           // Formatted creation timestamp
-	PhotoUrl           string `json:"group_photo"`          // URL for the group or chat photo
-	LastMessageContent string `json:"last_message_content"` // Content from the last message
-	LastMessageSentAt  string `json:"last_message_sent_at"` // Timestamp of the last message
+	ID                 string          `json:"id"`                   // Conversation ID
+	Name               string          `json:"name"`                 // Name of the conversation (group name or null for private chats)
+	IsGroup            bool            `json:"is_group"`             // True if it's a group chat, otherwise false
+	CreatedAt          string          `json:"created_at"`           // Formatted creation timestamp
+	PhotoUrl           string          `json:"group_photo"`          // URL for the group or chat photo
+	LastMessageContent string          `json:"last_message_content"` // Content from the last message
+	LastMessageSentAt  string          `json:"last_message_sent_at"`
+	Members            []database.User `json:"members"`
 }
 
 // getMyConversations retrieves all conversations for the authenticated user.

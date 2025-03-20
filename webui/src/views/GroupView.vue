@@ -37,6 +37,9 @@
                     <button class="action-button leave" @click="leaveGroupHandler(group.id)">
                       Leave
                     </button>
+                    <button class="action-button members" @click="openMembersModal(group)">
+                      Members
+                    </button>
                   </div>
                 </div>
               </div>
@@ -153,6 +156,23 @@
       </div>
     </div>
 
+    <!-- Members Modal -->
+    <div class="modal" v-if="showMembersModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Group Members</h2>
+          <button class="close-button" @click="showMembersModal = false">&times;</button>
+        </div>
+        <div class="modal-body">
+          <ul>
+            <li v-for="member in groupMembers" :key="member.id">
+              {{ member.username }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
     <!-- Notifications -->
     <div v-if="message" class="notification success">{{ message }}</div>
     <div v-if="error" class="notification error">{{ error }}</div>
@@ -169,16 +189,15 @@ import {
   listUsers,
   addUserToGroupByUsername,
   setGroupName,
-  setGroupPhoto,
+  setGroupPhoto
 } from "@/services/api.js";
 
 export default {
   name: "GroupManagement",
   setup() {
-    // Reactive state
+    // Existing reactive state
     const groupName = ref("");
     const groups = ref([]);
-    // Instead of groupPhoto (string URL) use a file ref
     const groupPhotoFile = ref(null);
     const message = ref("");
     const error = ref("");
@@ -193,9 +212,12 @@ export default {
     const updateGroupName = ref("");
     const updateGroupPhoto = ref("");
 
+    // New state for displaying group members
+    const showMembersModal = ref(false);
+    const groupMembers = ref([]);
+
     let refreshInterval = null;
 
-    // Computed property to filter users based on search query and exclude logged in user.
     const filteredAvailableUsers = computed(() => {
       return availableUsers.value.filter(user => 
         user.id !== loggedInUserID &&
@@ -207,25 +229,18 @@ export default {
       message.value = "";
       error.value = "";
       try {
-        // Create group without photo first. Assuming your backend accepts an empty photo.
         const groupResponse = await createGroup({
           groupName: groupName.value,
-          // Pass an empty string or null for photo if no file is provided.
           groupPhoto: ""
         });
         message.value = "Group created successfully";
-        // Clear the create group modal inputs
         showCreateGroupModal.value = false;
-        const newGroupId = groupResponse.data.groupId || groupResponse.data.id; // Adjust based on backend response
-        
-        // If a photo file was selected, upload it and update the group photo.
+        const newGroupId = groupResponse.data.groupId || groupResponse.data.id;
         if (groupPhotoFile.value && newGroupId) {
           const formData = new FormData();
           formData.append("photo", groupPhotoFile.value);
           try {
-            // uploadGroupImage expects a group id and a FormData object.
-            const uploadResponse = await uploadGroupImage(newGroupId, formData);
-            // Optionally, update the group photo immediately in your groups list after upload.
+            await uploadGroupImage(newGroupId, formData);
             message.value += " and group photo updated successfully";
           } catch (uploadErr) {
             error.value = "Group created but failed to upload photo";
@@ -244,10 +259,26 @@ export default {
     async function refreshGroups() {
       try {
         const response = await listUserGroups();
-        groups.value = (response.data.groups || []).map(group => ({
-          ...group,
-          photoUrl: group.group_photo || ""  // Map group_photo to photoUrl
-        }));
+        groups.value = (response.data.groups || []).map(group => {
+          return {
+            id: group.id,
+            name: group.name,
+            is_group: group.is_group,
+            created_at: group.created_at,
+            group_photo: group.group_photo,
+            photoUrl: group.group_photo || "",
+            last_message_content: group.last_message_content,
+            last_message_sent_at: group.last_message_sent_at,
+            members: (group.members || []).map(member => ({
+              id: member.ID, 
+              username: member.Username, 
+              photo_url:
+                member.PhotoUrl && member.PhotoUrl.Valid
+                  ? member.PhotoUrl.String
+                  : ""
+            }))
+          };
+        });
       } catch (err) {
         error.value = "Failed to load groups";
         console.error(err);
@@ -274,7 +305,6 @@ export default {
       selectedGroup.value = groups.value.find(g => g.id === groupId);
       try {
         const response = await listUsers();
-        // Exclude logged in user while assigning.
         availableUsers.value = response.data.users.filter(u => u.id !== loggedInUserID) || [];
         showAddUserModal.value = true;
       } catch (err) {
@@ -308,17 +338,13 @@ export default {
       showUpdateModal.value = true;
     }
 
-    // Handler for file upload in update group modal
     async function handleUpdateGroupPhotoUpload(event) {
       const file = event.target.files[0];
       if (!file || !selectedGroup.value || !selectedGroup.value.id) return;
-      
       const formData = new FormData();
       formData.append("photo", file);
-      
       try {
         const response = await uploadGroupImage(selectedGroup.value.id, formData);
-        // Assume the response contains the new photo URL in response.data.photoUrl.
         updateGroupPhoto.value = response.data.photoUrl;
         message.value = "Group photo updated successfully";
       } catch (err) {
@@ -348,7 +374,6 @@ export default {
       showUpdateModal.value = false;
     }
 
-    // New function to handle file selection for the create group modal
     function handleGroupPhotoUpload(event) {
       const file = event.target.files[0];
       if (file) {
@@ -356,10 +381,18 @@ export default {
       }
     }
 
-    // Auto-refresh every half second
+    // New: Open members modal using selected group's members
+    function openMembersModal(group) {
+      // Use members array from the mapped group object.
+      groupMembers.value = group.members || [];
+      // Optionally set selectedGroup if you need extra detail in modal header.
+      showMembersModal.value = true;
+    }
+
+    // Auto-refresh groups periodically
     onMounted(() => {
       refreshGroups();
-      refreshInterval = setInterval(refreshGroups, 500); // Changed from 1000 to 500ms
+      refreshInterval = setInterval(refreshGroups, 500);
     });
 
     onUnmounted(() => {
@@ -393,6 +426,10 @@ export default {
       closeAddUserModal,
       handleUpdateGroupPhotoUpload,
       handleGroupPhotoUpload,
+      // Expose members modal properties
+      showMembersModal,
+      groupMembers,
+      openMembersModal,
     };
   },
 };
@@ -536,6 +573,11 @@ export default {
   color: white;
 }
 
+.action-button.members {
+  background-color: #f59f00;
+  color: white;
+}
+
 .action-button:hover {
   opacity: 0.9;
 }
@@ -556,7 +598,7 @@ export default {
   color: #495057;
 }
 
-.empty-state p {
+empty-state p {
   margin: 0;
   font-size: 0.9rem;
 }

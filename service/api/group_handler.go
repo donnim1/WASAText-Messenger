@@ -62,11 +62,14 @@ func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprout
 			formattedCreatedAt = t.Format("2006-01-02 15:04:05")
 		}
 		apiConversations = append(apiConversations, Conversation{
-			ID:        conv.ID,
-			Name:      conv.Name,
-			IsGroup:   conv.IsGroup,
-			CreatedAt: formattedCreatedAt,
-			PhotoUrl:  conv.PhotoUrl,
+			ID:                 conv.ID,
+			Name:               conv.Name,
+			IsGroup:            conv.IsGroup,
+			CreatedAt:          formattedCreatedAt,
+			PhotoUrl:           conv.PhotoUrl,
+			LastMessageContent: conv.LastMessageContent, // adjust if needed
+			LastMessageSentAt:  conv.LastMessageSentAt,  // adjust if needed
+			Members:            conv.Members,            // include the members from the DB
 		})
 	}
 
@@ -254,6 +257,7 @@ func convertDBConversationToConversation(dbConv database.Conversation) Conversat
 		ID:       dbConv.ID,
 		Name:     dbConv.Name,
 		PhotoUrl: dbConv.PhotoUrl,
+		Members:  dbConv.Members,
 		// Add other fields as needed.
 	}
 }

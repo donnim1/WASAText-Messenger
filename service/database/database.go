@@ -66,7 +66,8 @@ type Conversation struct {
 	IsGroup            bool           `json:"is_group"`
 	CreatedAt          string         `json:"created_at"`
 	Messages           []Message      `json:"messages"`
-	PhotoUrl           string         `json:"photoUrl"`             // Timestamp of when the conversation was created
+	PhotoUrl           string         `json:"photoUrl"` // Timestamp of when the conversation was created
+	Members            []User         `json:"members"`
 	LastMessageContent sql.NullString `json:"last_message_content"` // New field for the last message content
 	LastMessageSentAt  sql.NullString `json:"last_message_sent_at"` // New field for the last message sent time
 }
@@ -145,12 +146,14 @@ func (db *appdbimpl) GetConversationBetween(userID1, userID2 string) (*Conversat
 
 // GetGroupsByUserID retrieves all group conversations associated with a user.
 func (db *appdbimpl) GetGroupsByUserID(userID string) ([]Conversation, error) {
+	// Query to get groups that the user is a member of (only groups).
 	query := `
-      SELECT c.id, c.name, c.is_group, c.created_at, c.group_photo
-      FROM conversations c
-      JOIN group_members gm ON c.id = gm.group_id
-      WHERE gm.user_id = ? AND c.is_group = 1
-    `
+     SELECT c.id, c.name, c.is_group, c.created_at, c.group_photo, 
+            NULL as last_message_content, NULL as last_message_sent_at
+     FROM conversations c
+     INNER JOIN group_members gm ON c.id = gm.group_id
+     WHERE gm.user_id = ? AND c.is_group = 1
+ `
 	rows, err := db.db.Query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch groups: %w", err)
@@ -160,13 +163,53 @@ func (db *appdbimpl) GetGroupsByUserID(userID string) ([]Conversation, error) {
 	var groups []Conversation
 	for rows.Next() {
 		var conv Conversation
-		// Previously, group_photo was scanned into a new interface{}
-		if err := rows.Scan(&conv.ID, &conv.Name, &conv.IsGroup, &conv.CreatedAt, &conv.PhotoUrl); err != nil {
+		var name, groupPhoto sql.NullString
+		var lastMsgContent, lastMsgSentAt sql.NullString
+		if err := rows.Scan(&conv.ID, &name, &conv.IsGroup, &conv.CreatedAt, &groupPhoto, &lastMsgContent, &lastMsgSentAt); err != nil {
 			return nil, fmt.Errorf("failed to scan group: %w", err)
 		}
+
+		if name.Valid {
+			conv.Name = name.String
+		}
+		if groupPhoto.Valid {
+			conv.PhotoUrl = groupPhoto.String
+		}
+		if lastMsgContent.Valid {
+			conv.LastMessageContent = lastMsgContent
+		}
+		if lastMsgSentAt.Valid {
+			conv.LastMessageSentAt = lastMsgSentAt
+		}
+
+		// Retrieve members for this group.
+		memberQuery := `
+            SELECT u.id, u.username, u.photo_url
+            FROM users u
+            INNER JOIN group_members gm ON u.id = gm.user_id
+            WHERE gm.group_id = ?
+        `
+		memberRows, err := db.db.Query(memberQuery, conv.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch group members: %w", err)
+		}
+
+		var members []User
+		for memberRows.Next() {
+			var member User
+			if err := memberRows.Scan(&member.ID, &member.Username, &member.PhotoUrl); err != nil {
+				memberRows.Close()
+				return nil, fmt.Errorf("failed to scan group member: %w", err)
+			}
+			members = append(members, member)
+		}
+		// Explicitly close after processing.
+		memberRows.Close()
+		conv.Members = members
+
 		groups = append(groups, conv)
 	}
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return groups, nil
