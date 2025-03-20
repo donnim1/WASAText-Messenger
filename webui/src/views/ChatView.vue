@@ -706,16 +706,23 @@ export default {
 
     async function markVisibleMessagesAsRead() {
       if (!messagesContainer.value) return;
+
       const observer = new IntersectionObserver(
         async (entries) => {
           for (const entry of entries) {
             if (entry.isIntersecting) {
               const msgId = entry.target.dataset.messageId;
               const msg = messages.value.find(m => m.ID === msgId);
+              // Only call update if it wasn't already marked as read
               if (msg && msg.SenderID !== currentUserId && msg.status !== 'read') {
                 try {
-                  await updateMessageStatus(msg.ID, 'read');
-                  msg.status = 'read';
+                  // Call the API which should update the 'read' status only once all users have seen the message.
+                  const res = await updateMessageStatus(msg.ID, 'read');
+                  // Check the response—for example, if res.data.allSeen is true then update the local status.
+                  if (res.data && res.data.allSeen) {
+                    msg.status = 'read';
+                    // Optionally, update other properties returned by the API (like msg.readAt)
+                  }
                 } catch (err) {
                   console.error(`Failed to mark message ${msg.ID} as read:`, err);
                 }
@@ -728,6 +735,7 @@ export default {
           threshold: 0.5,
         }
       );
+
       document.querySelectorAll(".message-bubble").forEach(el => {
         observer.observe(el);
       });
@@ -788,7 +796,8 @@ export default {
       selectForwardTarget, // <-- Added here
       groupReactions, // <-- Added here
       isForwardEnabled, // <-- Added here
-      loadForwardTargets // <-- Added here
+      loadForwardTargets, // <-- Added here
+      markVisibleMessagesAsRead // <-- Added here
     };
   },
 };
