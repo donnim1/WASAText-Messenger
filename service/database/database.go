@@ -901,66 +901,70 @@ func (db *appdbimpl) GetPrivateConversation(userID, receiverID string) (*Convers
 	return &conv, nil
 }
 func (db *appdbimpl) UpdateMessageStatus(messageID, status, userID string) error {
-	currentTime := time.Now().UTC().Format(time.RFC3339)
+    currentTime := time.Now().UTC().Format(time.RFC3339)
 
-	if status == "delivered" {
-		// For delivered, update normally.
-		query := "UPDATE messages SET status = ?, deliveredAt = ? WHERE id = ? AND status != 'read'"
-		_, err := db.db.Exec(query, status, currentTime, messageID)
-		return err
-	} else if status == "read" {
-		// Step 1: Insert or update the read receipt for the current user.
-		_, err := db.db.Exec(
-			"INSERT OR REPLACE INTO message_read_receipts (message_id, user_id, read_at) VALUES (?, ?, ?)",
-			messageID, userID, currentTime,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert read receipt: %w", err)
-		}
+    if status == "delivered" {
+        // For delivered status, update as usual.
+        query := "UPDATE messages SET status = ?, deliveredAt = ? WHERE id = ? AND status != 'read'"
+        _, err := db.db.Exec(query, status, currentTime, messageID)
+        return err
+    } else if status == "read" {
+        // Insert (or replace) a read receipt for the current user.
+        _, err := db.db.Exec(
+            "INSERT OR REPLACE INTO message_read_receipts (message_id, user_id, read_at) VALUES (?, ?, ?)",
+            messageID, userID, currentTime,
+        )
+        if err != nil {
+            return fmt.Errorf("failed to insert read receipt: %w", err)
+        }
 
-		// Step 2: Retrieve the conversation for this message.
-		var conversationID string
-		err = db.db.QueryRow("SELECT conversation_id FROM messages WHERE id = ?", messageID).Scan(&conversationID)
-		if err != nil {
-			return fmt.Errorf("failed to retrieve conversation id: %w", err)
-		}
+        // Retrieve the conversation ID for this message.
+        var conversationID string
+        err = db.db.QueryRow("SELECT conversation_id FROM messages WHERE id = ?", messageID).Scan(&conversationID)
+        if err != nil {
+            return fmt.Errorf("failed to retrieve conversation id: %w", err)
+        }
 
-		// Step 3: Check whether the conversation is a group chat.
-		var isGroup bool
-		err = db.db.QueryRow("SELECT is_group FROM conversations WHERE id = ?", conversationID).Scan(&isGroup)
-		if err != nil {
-			return fmt.Errorf("failed to check conversation type: %w", err)
-		}
+        // Check if this conversation is a group chat.
+        var isGroup bool
+        err = db.db.QueryRow("SELECT is_group FROM conversations WHERE id = ?", conversationID).Scan(&isGroup)
+        if err != nil {
+            return fmt.Errorf("failed to check conversation type: %w", err)
+        }
 
-		if !isGroup {
-			// For private chats, simply update the message status.
-			query := "UPDATE messages SET status = ?, readAt = ? WHERE id = ?"
-			_, err := db.db.Exec(query, status, currentTime, messageID)
-			return err
-		} else {
-			// For group chats, first count the total members.
-			var totalMembers int
-			err = db.db.QueryRow("SELECT COUNT(*) FROM group_members WHERE group_id = ?", conversationID).Scan(&totalMembers)
-			if err != nil {
-				return fmt.Errorf("failed to count group members: %w", err)
-			}
+        if !isGroup {
+            // For private chats, update immediately.
+            query := "UPDATE messages SET status = ?, readAt = ? WHERE id = ?"
+            _, err := db.db.Exec(query, status, currentTime, messageID)
+            return err
+        } else {
+            // For group chats, count total group members.
+            var totalMembers int
+            err = db.db.QueryRow("SELECT COUNT(*) FROM group_members WHERE group_id = ?", conversationID).Scan(&totalMembers)
+            if err != nil {
+                return fmt.Errorf("failed to count group members: %w", err)
+            }
 
-			// Count the number of read receipts for this message.
-			var totalRead int
-			err = db.db.QueryRow("SELECT COUNT(*) FROM message_read_receipts WHERE message_id = ?", messageID).Scan(&totalRead)
-			if err != nil {
-				return fmt.Errorf("failed to count read receipts: %w", err)
-			}
+            // Count the number of read receipts for this message.
+            var totalRead int
+            err = db.db.QueryRow("SELECT COUNT(*) FROM message_read_receipts WHERE message_id = ?", messageID).Scan(&totalRead)
+            if err != nil {
+                return fmt.Errorf("failed to count read receipts: %w", err)
+            }
 
-			if totalRead >= totalMembers {
-				// Every member has seen the message — update status to "read".
-				query := "UPDATE messages SET status = ?, readAt = ? WHERE id = ?"
-				_, err := db.db.Exec(query, status, currentTime, messageID)
-				return err
-			}
-			// If not all members have seen it, the message status stays unchanged.
-			return nil
-		}
-	}
-	return fmt.Errorf("unsupported status update: %s", status)
+            // Logging the counts for debugging purposes.
+            log.Printf("UpdateMessageStatus: messageID=%s, totalMembers=%d, totalRead=%d", messageID, totalMembers, totalRead)
+
+            // Update the message's status to "read" when totalRead is greater than or equal to totalMembers - 1 (since the sender does not send a receipt).
+            if totalRead >= (totalMembers - 1) {
+                query := "UPDATE messages SET status = ?, readAt = ? WHERE id = ?"
+                _, err := db.db.Exec(query, status, currentTime, messageID)
+                return err
+            }
+
+            // Not all members (except sender) have read the message yet.
+            return nil
+        }
+    }
+    return fmt.Errorf("unsupported status update: %s", status)
 }
