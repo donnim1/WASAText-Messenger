@@ -19,7 +19,12 @@
           </div>
           
           <!-- Render message content -->
-          <div v-if="isImage(msg.Content)">
+          <div v-if="isHtmlContent(msg.Content)" v-html="msg.Content"></div>
+          <div v-else-if="isForwardedImage(msg.Content)" class="forwarded-image">
+            <div class="forward-caption">Forwarded from you:</div>
+            <img :src="getForwardedImageSrc(msg.Content)" alt="Image message" class="sent-image" />
+          </div>
+          <div v-else-if="isImage(msg.Content)">
             <img :src="msg.Content" alt="Image message" class="sent-image" />
           </div>
           <div v-else>
@@ -760,6 +765,20 @@ export default {
       return !!(msgId && targetId);
     });
 
+    function isForwardedImage(content) {
+      if (!content) return false;
+      return content.startsWith("FORWARDED_IMAGE:");
+    }
+
+    function getForwardedImageSrc(content) {
+      // Remove the marker "FORWARDED_IMAGE:" from the content.
+      return content.substring("FORWARDED_IMAGE:".length);
+    }
+
+    function isHtmlContent(content) {
+      return content.trim().startsWith('<div class="forward-caption">');
+    }
+
     return {
       conversationTitle,
       messages,
@@ -797,7 +816,10 @@ export default {
       groupReactions, // <-- Added here
       isForwardEnabled, // <-- Added here
       loadForwardTargets, // <-- Added here
-      markVisibleMessagesAsRead // <-- Added here
+      markVisibleMessagesAsRead, // <-- Added here
+      isForwardedImage, // <-- Added here
+      getForwardedImageSrc, // <-- Added here
+      isHtmlContent // <-- Added here
     };
   },
 };
@@ -1187,6 +1209,9 @@ export default {
   border: 1px solid rgba(0,0,0,0.1);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   transition: opacity 0.3s ease;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .message-status {
@@ -1207,5 +1232,24 @@ export default {
 
 .message-status .read {
   color: #34B7F1 !important;
+}
+
+.forward-caption {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 4px;
+  text-align: center;
+  width: 100%;
+}
+
+.forwarded-image {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.forwarded-image .sent-image {
+  max-height: 150px;  /* Adjust height as needed */
+  max-width: 80%;     /* Optionally, limit width for forwarded images */
 }
 </style>

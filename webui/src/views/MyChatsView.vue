@@ -29,7 +29,10 @@
                 <span class="timestamp">{{ formatTimestamp(conv.last_message_sent_at) }}</span>
               </div>
               <div class="last-message-preview">
-                <template v-if="isImage(conv.last_message_content)">
+                <template v-if="isForwardedImage(conv.last_message_content)">
+                  <p class="last-message">Forwarded from you: Image</p>
+                </template>
+                <template v-else-if="isImage(conv.last_message_content)">
                   <p class="last-message">Image</p>
                 </template>
                 <template v-else>
@@ -102,15 +105,19 @@ export default {
     const defaultPhoto = "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg";
     let refreshInterval = null;
 
-    // Helper to check if given content is an image
+    // Helper to check if content is an image
     const isImage = (content) => {
       if (!content) return false;
-      // Check for a Base64 image URL
       if (content.startsWith("data:image/")) return true;
-      // Otherwise, check for a normal HTTP/HTTPS image URL based on common extensions.
       const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
       const pattern = new RegExp(`https?://.*\\.(${imageExtensions.join("|")})(\\?.*)?$`, "i");
       return pattern.test(content);
+    };
+
+    // New helper to detect if the message is a forwarded image
+    const isForwardedImage = (content) => {
+      if (!content) return false;
+      return content.trim().startsWith('<div class="forward-caption">');
     };
 
     async function loadConversations() {
@@ -132,7 +139,7 @@ export default {
           .filter((u) => u.id !== currentUserID)
           .map((user) => ({
             ...user,
-            isOnline: false // Default to offline; replace with real online status when available.
+            isOnline: false
           }));
       } catch (err) {
         usersError.value = "Failed to load contacts";
@@ -140,7 +147,6 @@ export default {
       }
     }
 
-    // Filtered contacts computed property.
     const filteredUsers = computed(() => {
       if (!userSearchQuery.value) return users.value;
       const query = userSearchQuery.value.toLowerCase();
@@ -180,7 +186,6 @@ export default {
       const now = new Date();
       const diff = now - date;
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      
       if (days === 0) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       } else if (days === 1) {
@@ -220,7 +225,8 @@ export default {
       openChatWithUser,
       formatTimestamp,
       defaultPhoto,
-      isImage  // Export the helper to use in the template
+      isImage,
+      isForwardedImage
     };
   },
 };
