@@ -11,7 +11,7 @@ services:
       - sqlite-data:/app/data
       - uploads:/app/uploads
     environment:
-      - DB_FILENAME=/app/data/wasatext.db
+      - DB_FILENAME=/app/data/decaf.db
 
   frontend:
     build:

@@ -13,6 +13,11 @@
         :class="['message-wrapper', { sent: msg.SenderID === currentUserId }]"
       >
         <div class="message-bubble" :data-message-id="msg.ID">
+          <!-- New: Display sender username for group chat messages (if not your own) -->
+          <div v-if="conversationIsGroup && msg.SenderID !== currentUserId" class="sender-name">
+            {{ getSenderName(msg.SenderID) }}
+          </div>
+          
           <!-- Only show reply preview when message was sent as a reply -->
           <div v-if="msg.ReplyTo && msg.ReplyTo !== ''" class="inline-reply-preview">
             <small>In reply to: {{ getReplyContent(msg.ReplyTo) }}</small>
@@ -225,6 +230,19 @@ export default {
       return map;
     });
 
+    const conversation = ref({});
+
+    const conversationIsGroup = computed(() => {
+      if (conversation.value && conversation.value.is_group !== undefined) {
+        console.log("[conversationIsGroup] from conversation:", conversation.value.is_group);
+        return conversation.value.is_group;
+      }
+      // Fallback to route query if conversation isn't loaded yet.
+      const flag = route.query.isGroup === "true";
+      console.log("[conversationIsGroup] from route query:", flag);
+      return flag;
+    });
+
     // Helper to get reply content from reply_to ID.
     function getReplyContent(replyID) {
       const originalMsg = messagesMap.value[replyID];
@@ -327,6 +345,7 @@ export default {
       try {
         const response = await getConversation(convId);
         messages.value = response.data.messages || [];
+        conversation.value = response.data.conversation || {};
         await nextTick();
         scrollToBottom();
         markVisibleMessagesAsRead();
@@ -473,6 +492,7 @@ export default {
     }
 
     onMounted(() => {
+      loadContacts();
       initializeChat();
       startMessagePolling();
     });
@@ -660,14 +680,16 @@ export default {
     async function loadContacts() {
       try {
         const response = await listUsers();
-        // Assuming the response returns an object with a "users" array.
+        console.log("[loadContacts] API response:", response.data);
         if (response.data && Array.isArray(response.data.users)) {
           contacts.value = response.data.users;
         } else {
           contacts.value = [];
+          console.warn("[loadContacts] No users array in response.data:", response.data);
         }
+        console.log("[loadContacts] Loaded contacts:", contacts.value);
       } catch (err) {
-        console.error("Error loading contacts:", err);
+        console.error("[loadContacts] Error loading contacts:", err);
         contacts.value = [];
       }
     }
@@ -779,6 +801,24 @@ export default {
       return content.trim().startsWith('<div class="forward-caption">');
     }
 
+    function getSenderName(senderId) {
+      console.log("[getSenderName] Called for senderId:", senderId);
+      if (senderId === currentUserId) {
+        console.log("[getSenderName] Sender is current user. Returning empty string.");
+        return "";
+      }
+      console.log("[getSenderName] Contacts:", contacts.value);
+      // Try matching using both 'id' and 'ID'
+      const foundContact = contacts.value.find(contact => (contact.id || contact.ID) === senderId);
+      if (foundContact) {
+        console.log("[getSenderName] Found contact:", foundContact, "Available keys:", Object.keys(foundContact));
+        return foundContact.username || foundContact.userName || "Unknown";
+      } else {
+        console.warn("[getSenderName] No contact found for senderId:", senderId, "Available contacts:", contacts.value);
+        return "Unknown";
+      }
+    }
+
     return {
       conversationTitle,
       messages,
@@ -819,7 +859,10 @@ export default {
       markVisibleMessagesAsRead, // <-- Added here
       isForwardedImage, // <-- Added here
       getForwardedImageSrc, // <-- Added here
-      isHtmlContent // <-- Added here
+      isHtmlContent, // <-- Added here
+      conversationIsGroup, // <-- Added here
+      getSenderName, // <-- Added here
+      loadContacts
     };
   },
 };
@@ -906,6 +949,14 @@ export default {
   background-color: #e7f3fe; /* softer blue */
   border: 1px solid #c2e0f4;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Sender name styling */
+.sender-name {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #007bff;
+  margin-bottom: 4px;
 }
 
 /* Message content and timestamp */

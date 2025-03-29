@@ -718,7 +718,7 @@ func (db *appdbimpl) createConversation(userID, receiverID string) (string, erro
 func (db *appdbimpl) ForwardMessage(originalMessageID, targetConversationID, senderID string) (string, error) {
 	// Retrieve the original message content.
 	var originalContent string
- 	err := db.db.QueryRow("SELECT content FROM messages WHERE id = ?", originalMessageID).
+	err := db.db.QueryRow("SELECT content FROM messages WHERE id = ?", originalMessageID).
 		Scan(&originalContent)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve original message: %w", err)
