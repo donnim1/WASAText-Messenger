@@ -82,7 +82,7 @@ export async function uncommentMessage(messageId) {
 }
 
 export function deleteMessage(messageId) {
-  return axios.delete(`/messages/${messageId}/delete`);
+  return axios.delete(`/messages/${messageId}`);
 }
 
 // Group Management Endpoints
