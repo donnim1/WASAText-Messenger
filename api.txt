@@ -1,0 +1,3 @@
+Loaded config from spectral.js
+doc/api.yaml passed the validator
+

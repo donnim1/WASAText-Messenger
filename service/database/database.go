@@ -373,7 +373,15 @@ func (db *appdbimpl) GetConversation(conversationID string) (*Conversation, []Me
 				UserID:   userID,
 				UserName: userName,
 			})
+
+			
 		}
+
+		if err := reactionRows.Err(); err != nil {
+			return &conv, messages, fmt.Errorf("reaction rows iteration error: %w", err)
+		}
+
+	
 
 		// Attach reactions to each message.
 		for i, msg := range messages {
