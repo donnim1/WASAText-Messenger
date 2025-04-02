@@ -204,7 +204,10 @@ func (db *appdbimpl) GetGroupsByUserID(userID string) ([]Conversation, error) {
 			}
 			members = append(members, member)
 		}
-		// Explicitly close after processing.
+		if err := memberRows.Err(); err != nil {
+			memberRows.Close()
+			return nil, fmt.Errorf("group members rows iteration error: %w", err)
+		}
 		memberRows.Close()
 		conv.Members = members
 
@@ -222,7 +225,7 @@ func (db *appdbimpl) CreateGroup(creatorID, groupName, groupPhoto string) (strin
 		return "", fmt.Errorf("transaction start failed: %w", err)
 	}
 	defer func() {
-		if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
 			log.Printf("tx.Rollback() error: %v", rbErr)
 		}
 	}()
