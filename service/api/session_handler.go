@@ -20,7 +20,7 @@ type loginResponse struct {
 	PhotoURL   string `json:"photoUrl,omitempty"`
 }
 
-func (rt *_router) postSession(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		// Use errors.Is to check for wrapped errors (e.g., io.EOF)

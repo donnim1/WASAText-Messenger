@@ -30,7 +30,7 @@ paths:
       description: >
         If the user does not exist, they are created and an identifier is returned.
         If the user exists, the user identifier is returned.
-      operationId: postSession
+      operationId: doLogin
       requestBody:
         required: true
         content:
@@ -1086,6 +1086,7 @@ components:
         Retry-After:
           schema:
             type: integer
+            description: the number of seconds to wait before trying
           description: Number of seconds to wait before retrying.
       content:
         application/json:
