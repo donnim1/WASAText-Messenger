@@ -13,9 +13,6 @@ FROM debian:bullseye
 ### Inform Docker about which ports are used
 EXPOSE 3000 4000
 
-### Create necessary directories: For example, /app/data for the database
-RUN mkdir -p /app/data /app/uploads
-
 ### Set the working directory
 WORKDIR /app/
 
