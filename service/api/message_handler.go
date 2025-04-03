@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"github.com/donnim1/WASAText/service/api/reqcontext"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -24,7 +25,7 @@ type MessageResponse struct {
 	ConversationID string `json:"conversationId"`
 }
 
-func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	// Validate Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -72,7 +73,7 @@ type forwardMessageRequest struct {
 	// SenderID is removed because we use the token's userID.
 }
 
-func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) forwardMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	// Validate Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -110,7 +111,7 @@ type commentMessageRequest struct {
 	Reaction string `json:"reaction"`
 }
 
-func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	// Get authenticated user ID.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -148,7 +149,7 @@ func (rt *_router) commentMessage(w http.ResponseWriter, r *http.Request, ps htt
 	}
 }
 
-func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	// Get authenticated user ID.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -174,7 +175,7 @@ func (rt *_router) uncommentMessage(w http.ResponseWriter, r *http.Request, ps h
 	}
 }
 
-func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	// Get authenticated user ID.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -202,7 +203,7 @@ func (rt *_router) deleteMessage(w http.ResponseWriter, r *http.Request, ps http
 	}
 }
 
-func (rt *_router) updateMessageStatus(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) updateMessageStatus(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	// Get message ID and new status from URL parameters.
 	messageID := ps.ByName("messageId")
 	status := ps.ByName("status") // Expected values: "delivered" or "read"

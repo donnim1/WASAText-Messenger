@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"github.com/donnim1/WASAText/service/api/reqcontext"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -24,7 +25,7 @@ type userNameUpdateResponse struct {
 }
 
 // setMyUserName updates the username for an existing user.
-func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	// Validate the Authorization header and extract the authenticated user ID.
 	authenticatedUserID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -70,7 +71,7 @@ type userPhotoUpdateRequest struct {
 // setMyPhoto updates the user's profile photo.
 // Fixes include handling both file upload and JSON-based photo update separately and
 // renaming error variables to avoid conflation.
-func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	// Extract authenticated user ID from JWT or session.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -169,7 +170,7 @@ type UserSummary struct {
 }
 
 // listUsers handles GET requests to /users and returns all users.
-func (rt *_router) listUsers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) listUsers(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	// (Optional) Validate Authorization header if you want only authenticated users to view the list.
 	if _, err := rt.getAuthenticatedUserID(r); err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)

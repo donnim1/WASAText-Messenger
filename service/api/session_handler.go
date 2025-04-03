@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/donnim1/WASAText/service/api/reqcontext"
 )
 
 type loginRequest struct {
@@ -20,7 +21,7 @@ type loginResponse struct {
 	PhotoURL   string `json:"photoUrl,omitempty"`
 }
 
-func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		// Use errors.Is to check for wrapped errors (e.g., io.EOF)

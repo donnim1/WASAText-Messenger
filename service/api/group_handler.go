@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"github.com/donnim1/WASAText/service/api/reqcontext"
 
 	"github.com/donnim1/WASAText/service/database"
 	"github.com/julienschmidt/httprouter"
@@ -20,7 +21,7 @@ type groupListResponse struct {
 }
 
 // listGroups handles GET /groups and returns all groups the authenticated user is a member of.
-func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) listGroups(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	// Validate the Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -93,7 +94,7 @@ type createGroupResponse struct {
 }
 
 // createGroup handles POST /groups/create to create a new group.
-func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	creatorID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -131,7 +132,7 @@ type addToGroupRequest struct {
 }
 
 // addToGroup handles POST /groups/add to add a user to a group.
-func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -182,7 +183,7 @@ type leaveGroupRequest struct {
 }
 
 // leaveGroup handles DELETE /groups/leave to remove a user from a group.
-func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -214,7 +215,7 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprou
 }
 
 // setGroupName handles PUT /groups/name to update a group's name.
-func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -262,7 +263,7 @@ func convertDBConversationToConversation(dbConv database.Conversation) Conversat
 	}
 }
 
-func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	_, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)

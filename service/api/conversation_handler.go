@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 	"time"
-
+	"github.com/donnim1/WASAText/service/api/reqcontext"
 	"github.com/donnim1/WASAText/service/database"
 	"github.com/julienschmidt/httprouter"
 )
@@ -19,7 +19,7 @@ type ConversationResponse struct {
 // GetConversationByReceiver handles requests to fetch a conversation by receiverID.
 // It expects the current user's ID to be provided via the Authorization header.
 // Route: GET /conversationsfor/:receiverId
-func (rt *_router) GetConversationByReceiver(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) GetConversationByReceiver(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	receiverId := ps.ByName("receiverId")
 
 	// Extract current user ID from the Authorization header.
@@ -67,7 +67,7 @@ type Conversation struct {
 }
 
 // getMyConversations retrieves all conversations for the authenticated user.
-func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	// 1. Get the authenticated user ID from the Authorization header.
 	userID, err := rt.getAuthenticatedUserID(r)
 	if err != nil {
@@ -130,7 +130,7 @@ func (rt *_router) getMyConversations(w http.ResponseWriter, r *http.Request, _ 
 }
 
 // getConversation handles GET requests to /conversations/:conversationId.
-func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	// 1. Validate the Authorization header.
 	currentUserId, err := rt.getAuthenticatedUserID(r)
 	if err != nil || currentUserId == "" {
